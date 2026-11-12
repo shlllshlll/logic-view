@@ -26,6 +26,7 @@
 #include <QMessageBox>
 #include <QThread>
 #include <QTimer>
+#include <QDir>
 #include <QFile>
 #include <QDebug>
 #include <QDateTime>
@@ -33,10 +34,62 @@
 #include "../../../libsigrok/src/hardware/wch-ch32h417/ch375_wrapper.h"
 
 #include <hidapi.h>
+#ifdef __APPLE__
+#include <libusb.h>
+#endif
 
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+
+#ifdef __APPLE__
+namespace {
+
+/*
+ * On macOS a vendor-class device (bDeviceClass=0xFF) is not configured
+ * automatically, so its HID interface never appears in IOHIDManager and
+ * hid_open() fails.  Send SET_CONFIGURATION(1) ourselves and give the HID
+ * driver a moment to match.
+ */
+bool configure_iap_device(uint16_t vid, uint16_t pid)
+{
+	libusb_context *ctx = nullptr;
+	libusb_device **list = nullptr;
+	ssize_t n, i;
+	bool configured = false;
+
+	if (libusb_init(&ctx) != 0)
+		return false;
+
+	n = libusb_get_device_list(ctx, &list);
+	if (n < 0) {
+		libusb_exit(ctx);
+		return false;
+	}
+
+	for (i = 0; i < n; i++) {
+		struct libusb_device_descriptor desc;
+		if (libusb_get_device_descriptor(list[i], &desc) != 0)
+			continue;
+		if (desc.idVendor != vid || desc.idProduct != pid)
+			continue;
+
+		libusb_device_handle *handle = nullptr;
+		if (libusb_open(list[i], &handle) == 0) {
+			int ret = libusb_set_configuration(handle, 1);
+			configured = (ret == 0 || ret == LIBUSB_ERROR_BUSY);
+			libusb_close(handle);
+		}
+		break;
+	}
+
+	libusb_free_device_list(list, 1);
+	libusb_exit(ctx);
+	return configured;
+}
+
+} // namespace
+#endif /* __APPLE__ */
 
 namespace pv {
 namespace dialogs {
@@ -278,7 +331,15 @@ void IAPWorker::cancel()
 
 void IAPWorker::log(const QString &message)
 {
-    printf("[IAPWorker] %s\n", message.toLocal8Bit().constData());
+    const QString line = QStringLiteral("%1 %2")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss.zzz")),
+             message);
+    printf("[IAPWorker] %s\n", line.toLocal8Bit().constData());
+    QFile log_file(QDir::tempPath() + QStringLiteral("/logicanalyzer-iap.log"));
+    if (log_file.open(QIODevice::WriteOnly | QIODevice::Append)) {
+        log_file.write(line.toUtf8());
+        log_file.write("\n");
+    }
     Q_EMIT log_message(message);
 }
 
@@ -801,6 +862,13 @@ void IAPWorker::do_work()
             }
         }
     }
+
+#ifdef __APPLE__
+    /* macOS: make the IAP HID interface visible before hid_open(). */
+    if (!configure_iap_device(iap_vid_, iap_pid_))
+        log(tr("USB配置失败，继续尝试HID..."));
+    QThread::msleep(300);
+#endif
 
     int retry_count = 0;
     while (retry_count < 10) {

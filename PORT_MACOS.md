@@ -663,3 +663,53 @@ libsigrok/conf241733.file
 - 4MB × 8 在飞，200MHz × 100M 样本 ≈ 251MB/s（当前经 USB3 Hub）
 
 解除任一条件后执行 `macos/build.sh` 并重跑对应测试即可继续。
+
+---
+
+## 14. IAP 15% 失败与崩溃修复（2026-11-12）
+
+现象：固件升级到 15% 报错，随后进程收到 SIGTRAP，报告
+`Must only be used from the main thread`（`NSWMWindowCoordinator performTransactionUsingBlock:`）。
+
+这是两个独立问题：
+
+1. **macOS 不会自动配置 vendor-class 设备**。IAP 模式 `1a86:fe17` 的设备类为 `0xFF`，
+   但接口是 HID（class `0x03`，两个 64 字节中断端点）。设备没有被 `SET_CONFIGURATION`，
+   macOS 就不会实例化 HID 接口，`IOHIDManager`/hidapi 看不到它，`hid_open()` 永远失败，
+   于是卡在 15% 的“查找HID设备”。
+   - 修复：`IAPWorker` 在 `hid_open()` 前用 libusb 对 `1a86:fe17` 执行
+     `libusb_set_configuration(1)`（仅 `__APPLE__` 编译）。
+   - 验证：`tools/iap_hid_test.c` 实测配置后 `hid_open` 成功，product = `CH32H417 IAP`。
+2. **跨线程操作 GUI**。`IAPWorker::finished` 用无 context 的 lambda 连接，lambda 在
+   QThread 里执行，直接 `progressDlg->close()` 并创建 `QDialog`，触发 AppKit 主线程断言。
+   - 修复：`connect(worker, &IAPWorker::finished, this, ...)`，让 lambda 队列回主线程。
+
+IAP 日志现在写入 `/tmp/logicanalyzer-iap.log`（Finder 启动时也能看到）。
+
+注意：失败发生在 15%（在擦除之前），固件应仍完好；但设备当前停在 IAP 模式，
+需要重新上电/拔插。如果仍停在 IAP，可用新 App 的“固件升级”从 HID 模式直接重试。
+
+---
+
+## 15. 设备选项布局修复
+
+`Channels::init_ui()` 原来用 `QFormLayout::addRow(QVBoxLayout*)` 放 4 个通道模式单选按钮。
+macOS 上该行高度被压成 0，按钮文字互相重叠。现改为：
+
+- 把 `QVBoxLayout` 装进一个真正的 `QWidget` 再 `addRow`；
+- 对话框在 `addWidget(channels_)` 之后调用 `layout->activate()` 并按 `dialog->sizeHint()`
+  设置固定尺寸，避免用 reparent 前的过期 sizeHint 裁掉内容。
+
+---
+
+## 16. Windows 兼容性
+
+- `WIN32`/`MINGW` 仍编译原来的 `ch375_wrapper.c`；新增的
+  `ch375_wrapper_libusb.c` 只在非 Windows 平台参与编译。
+- Windows 专属代码（`MEMORYSTATUSEX`、`UpdateFwVersion.exe`、Qt 静态插件、
+  `-lusb-1.0`/`-lhidapi` 等）都在 `_WIN32` 或 `if(WIN32)` 内，未删除。
+- 本次修掉的 3 个编译错误（缺返回类型、`std::thread` 成员函数、通道 key 类型）
+  对 Windows 同样是修复。
+- IAP 的 `libusb` 配置代码用 `#ifdef __APPLE__` 包住，Windows 不新增依赖。
+- **未在本机执行 Windows 构建**（本机是 macOS）；需要在 MSYS2 MINGW64 下重跑
+  `./build.sh` 做最终确认。

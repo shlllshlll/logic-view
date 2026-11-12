@@ -177,7 +177,13 @@ void Channels::init_ui()
 		init_channel_radios(vbox_layout);
 
 		options_box->setLayout(options_layout);
-		options_layout->addRow(vbox_layout);
+		/* QFormLayout::addRow(QLayout*) collapses the row height on macOS;
+		 * use a real widget so the radio buttons get their full height. */
+		vbox_layout->setContentsMargins(0, 0, 0, 0);
+		vbox_layout->setSpacing(4);
+		QWidget* channel_mode_host = new QWidget(options_box);
+		channel_mode_host->setLayout(vbox_layout);
+		options_layout->addRow(channel_mode_host);
 		layout_.addRow(options_box);
 	}
 

@@ -2304,11 +2304,13 @@ namespace pv
 
 			dialog->setWindowFlags(dialog->windowFlags() & ~Qt::WindowContextHelpButtonHint);
 
-			dialog->setFixedSize(channels_->sizeHint());
-
 			QVBoxLayout *layout = new QVBoxLayout(dialog);
 			layout->setContentsMargins(0, 0, 0, 0);
 			layout->addWidget(channels_);
+			/* Let the layout compute the final size; a fixed size taken from
+			 * channels_->sizeHint() before reparenting can clip rows on macOS. */
+			layout->activate();
+			dialog->setFixedSize(dialog->sizeHint());
 			connect(dialog, &QDialog::finished, this, [this, dialog]()
 					{ channels_->setParent(this); channels_->parent_dialog_ = nullptr; });
 			dialog->setLayout(layout);
@@ -2531,7 +2533,7 @@ namespace pv
 
 			connect(workerThread, &QThread::started, worker, &pv::dialogs::IAPWorker::do_work);
 			connect(worker, &pv::dialogs::IAPWorker::progress_updated, progressDlg, &QProgressDialog::setValue);
-			connect(worker, &pv::dialogs::IAPWorker::finished, [=](bool success)
+			connect(worker, &pv::dialogs::IAPWorker::finished, this, [=](bool success)
 					{
 				progressDlg->close();
 				if (!success) {
