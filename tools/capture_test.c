@@ -24,6 +24,11 @@ static uint64_t transitions;
 static uint64_t nonzero;
 static uint16_t first_samples[8];
 static int first_count;
+static int adc_mode;
+static uint64_t adc_count;
+static double adc_min = 1e9, adc_max = -1e9;
+static float adc_first[4];
+static int adc_first_count;
 static uint16_t prev_sample;
 static gboolean have_prev;
 static gboolean got_end;
@@ -59,6 +64,21 @@ static void datafeed_cb(const struct sr_dev_inst *sdi,
 				first_samples[first_count++] = v;
 			prev_sample = v;
 			have_prev = TRUE;
+		}
+		break;
+	}
+	case SR_DF_ANALOG: {
+		const struct sr_datafeed_analog *a = packet->payload;
+		const float *f = a->data;
+		uint64_t i;
+
+		adc_count += a->num_samples;
+		for (i = 0; i < a->num_samples; i++) {
+			double v = f[i];
+			if (v < adc_min) adc_min = v;
+			if (v > adc_max) adc_max = v;
+			if (adc_first_count < 4)
+				adc_first[adc_first_count++] = (float)v;
 		}
 		break;
 	}
@@ -137,6 +157,16 @@ int main(int argc, char *argv[])
 	sr_config_set(sdi, NULL, SR_CONF_THRESHOLD_VALUE_1,
 		      g_variant_new_uint64(33));
 
+	if (getenv("CAPTURE_ADC")) {
+		adc_mode = 1;
+		sr_config_set(sdi, NULL, SR_CONF_PATTERN_MODE,
+			      g_variant_new_string("ADC"));
+		sr_config_set(sdi, NULL, SR_CONF_ADC_CHANNEL,
+			      g_variant_new_uint64(0));
+		sr_config_set(sdi, NULL, SR_CONF_ADC_PRECISION,
+			      g_variant_new_uint64(10));
+	}
+
 	if ((ret = sr_session_new(ctx, &session)) != SR_OK) {
 		fprintf(stderr, "session_new failed: %d\n", ret);
 		return 1;
@@ -161,6 +191,13 @@ int main(int argc, char *argv[])
 	       (unsigned long long)nonzero,
 	       (unsigned long long)transitions,
 	       got_end);
+	if (adc_mode) {
+		printf("adc samples=%llu min=%.3f max=%.3f first:",
+		       (unsigned long long)adc_count, adc_min, adc_max);
+		for (i = 0; i < adc_first_count; i++)
+			printf(" %.3f", adc_first[i]);
+		printf("\n");
+	}
 	printf("first samples:");
 	for (i = 0; i < first_count; i++)
 		printf(" %04x", first_samples[i]);
