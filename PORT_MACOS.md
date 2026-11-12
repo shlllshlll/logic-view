@@ -713,3 +713,27 @@ macOS 上该行高度被压成 0，按钮文字互相重叠。现改为：
 - IAP 的 `libusb` 配置代码用 `#ifdef __APPLE__` 包住，Windows 不新增依赖。
 - **未在本机执行 Windows 构建**（本机是 macOS）；需要在 MSYS2 MINGW64 下重跑
   `./build.sh` 做最终确认。
+
+---
+
+## 17. 启动崩溃：16 通道解码器的整除 bug（2026-11-12）
+
+现象：打开 App 立即 SIGABRT，栈在
+`pv::data::DecodeSignal::mux_logic_samples()` 的 `operator new`，
+异常为 `std::bad_alloc`。恢复的 UART 解码器触发了它。
+
+根因：`Segment::unit_size_temp` 是 `unsigned int`，而它的语义是“每个字节对应的样本数”
+`8.0 / channel_num_`。16 通道时该值是 `0.5`，被截断成 **0**；随后
+`mux_logic_samples()` 用它做除数/乘数，产生巨大或非法的缓冲区尺寸。
+
+修复：
+
+- `set_channel_numner()` 对 `channel_num_ >= 8` 使用安全哨兵值 `1`
+  （>=8 位的路径实际用 `unit_size_`，不再依赖这个字段）；
+- `mux_logic_samples()` 增加 `unit_size()/unit_size_temp` 有效性检查，
+  三个大缓冲区改用 `new (std::nothrow)`，失败时置中断而不是抛异常；
+- `begin_decode()` 每次重新计算 mux 单元大小并清空残留 mux segment；
+- `logic_mux_unit_size_` 在构造函数中初始化为 1。
+
+验证：修复后 App 在恢复 16 通道 + UART 解码器的状态下连续运行 8 秒无崩溃，
+日志不再出现 `Muxer error` / `bad_alloc`。

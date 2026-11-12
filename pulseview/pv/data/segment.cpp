@@ -604,8 +604,13 @@ uint64_t Segment::get_iterator_valid_length(SegmentDataIterator* it)
 
 void Segment::set_channel_numner(uint16_t channel_num)
 {
-	channel_num_ = channel_num;
-	unit_size_temp = (8.0 / channel_num_);
+	/* A restored decoder can report zero channels; dividing by zero here
+	 * yields an undefined unit_size_temp and later huge allocations. */
+	channel_num_ = (channel_num == 0) ? 1 : channel_num;
+	/* 8/channel_num is 0 for 16 channels, but this field is unsigned.
+	 * >=8-bit segments use unit_size_ instead, so 1 is a safe sentinel. */
+	unit_size_temp = (channel_num_ >= 8) ? 1u
+		: (unsigned int)(8 / channel_num_);
 	if (data_zoom == NULL) {
 		data_zoom = new(std::nothrow) uint8_t[chunk_size_ * unit_size_temp];
 		if (data_zoom == NULL) {

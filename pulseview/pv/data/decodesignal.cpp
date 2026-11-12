@@ -62,6 +62,7 @@ DecodeSignal::DecodeSignal(pv::Session &session) :
 	session_(session),
 	srd_session_(nullptr),
 	logic_mux_data_invalid_(false),
+	logic_mux_unit_size_(1),
 	stack_config_changed_(true),
 	current_segment_id_(0)
 {
@@ -269,11 +270,15 @@ void DecodeSignal::begin_decode()
 	if (logic_mux_data_invalid_)
 		logic_mux_data_.reset();
 
-	if (!logic_mux_data_) {
-		const uint32_t ch_count = get_assigned_signal_count();
-		logic_mux_unit_size_ = (ch_count + 7) / 8;
+	/* Recompute the mux unit size and drop stale mux segments every time.
+	 * A restored decoder can otherwise reuse old segments whose
+	 * unit_size_temp was never initialized, which crashes the muxer. */
+	const uint32_t ch_count = get_assigned_signal_count();
+	logic_mux_unit_size_ = (ch_count + 7) / 8;
+	if (!logic_mux_data_)
 		logic_mux_data_ = make_shared<Logic>(ch_count);
-	}
+	else
+		logic_mux_data_->clear();
 
 	if (get_input_segment_count() == 0)
 		set_error_message(tr("No input data"));
@@ -1281,8 +1286,9 @@ void DecodeSignal::mux_logic_samples(uint32_t segment_id, const int64_t start, c
 			if (unit_sz == 0)
 				return;
 
-			uint8_t* data = new uint8_t[(end - start) * unit_sz];
+			uint8_t* data = new (std::nothrow) uint8_t[(end - start) * unit_sz];
 			if (data == NULL) {
+				logic_mux_interrupt_ = true;
 				return;
 			}
 			segment->get_samples(start, end, data);
@@ -1304,8 +1310,22 @@ void DecodeSignal::mux_logic_samples(uint32_t segment_id, const int64_t start, c
 		return;
 	}
 
+	if (output_segment->unit_size() == 0 || output_segment->unit_size_temp == 0) {
+		qDebug() << "Muxer error for" << name()
+			 << ": invalid unit size for mux segment" << segment_id
+			 << "unit_size" << output_segment->unit_size()
+			 << "unit_size_temp" << output_segment->unit_size_temp
+			 << "logic_mux_unit_size" << logic_mux_unit_size_;
+		logic_mux_interrupt_ = true;
+		return;
+	}
+
 	// Perform the muxing of signal data into the output data
-	uint8_t* output = new uint8_t[(end - start) * output_segment->unit_size()];
+	uint8_t* output = new (std::nothrow) uint8_t[(end - start) * output_segment->unit_size()];
+	if (!output) {
+		logic_mux_interrupt_ = true;
+		return;
+	}
 	unsigned int signal_count = signal_data.size();
 
 	for (int64_t sample_cnt = 0; !logic_mux_interrupt_ && (sample_cnt < (end - start));
@@ -1334,8 +1354,10 @@ void DecodeSignal::mux_logic_samples(uint32_t segment_id, const int64_t start, c
 			}
 		}
 	}
-	output_zoom = new uint8_t[(uint64_t)(((end - start) / (double)output_segment->unit_size_temp) + 7)];
+	output_zoom = new (std::nothrow) uint8_t[(uint64_t)(((end - start) / (double)output_segment->unit_size_temp) + 7)];
 	if (output_zoom == NULL) {
+		logic_mux_interrupt_ = true;
+		delete[] output;
 		return;
 	}
 	if (output_segment->channel_num_ == 4){	
