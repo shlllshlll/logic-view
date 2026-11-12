@@ -86,7 +86,7 @@ using toolbars::MainBar;
 const QString MainWindow::WindowTitle = tr("U3LogicAnalyzer");
 
 
-MainWindow::MainWindow(QWidget *parent) :
+MainWindow::MainWindow(QWidget *parent, const std::string &driver) :
 	QMainWindow(parent),
 	session_selector_(this),
 	icon_red_(":/icons/status-red.svg"),
@@ -95,7 +95,7 @@ MainWindow::MainWindow(QWidget *parent) :
 {
 	//Check memory size
 	shared_ptr<sigrok::Context> context = sigrok::Context::create();
-	device_manager_ = new pv::DeviceManager(context, "", true);
+	device_manager_ = new pv::DeviceManager(context, driver, true);
 	sessions_.resize(0);
 	setup_ui();
 	restore_ui_settings();

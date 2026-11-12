@@ -78,7 +78,8 @@ private:
 
 public:
 	static bool checkSystemRequirements();
-	explicit MainWindow(QWidget *parent = nullptr);
+	explicit MainWindow(QWidget *parent = nullptr,
+		const std::string &driver = std::string());
 
 	~MainWindow();
 

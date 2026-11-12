@@ -398,7 +398,7 @@ int main(int argc, char *argv[])
 		} else {
 			// Initialise the main window
 			// pv::MainWindow w(device_manager);
-			pv::MainWindow w;
+			pv::MainWindow w(nullptr, driver);
 			w.show();
 
 #ifdef _WIN32
