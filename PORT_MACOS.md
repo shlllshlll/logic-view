@@ -587,7 +587,13 @@ libsigrok/conf241733.file
 1. ✅ 设备在 USB3（5Gbps）下的描述符/版本命令验证（`tools/usb_probe.m`）。
 2. ✅ 构建依赖安装并记录（`macos/deps.txt`、`macos/install_deps.sh`、`macos/cleanup_deps.sh`）。
 3. ✅ 源码目录整理：构建残留清理、`.bak` 归档到 `attic/`、新增 `README.md` / `.gitignore`。
-4. ✅ `git init` 并提交基线（见仓库首个 commit）。
+4. ✅ `git init` 并提交基线（commit `1ac1b0e`）。
+
+配置检查（2026-11-12）：
+
+- `libsigrok` configure **通过**（glib / libusb / libzip 均被识别）。
+- `libsigrokdecode` configure **失败**，原因正是 `pkg_check_modules(PYTHON3 REQUIRED python3>=3.2)`：
+  Homebrew 只提供 `python-3.14-embed.pc`。这是 P0 要修的第一项。
 
 开始 P0 前确认：
 
