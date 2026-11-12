@@ -122,5 +122,8 @@ Windows 产物自包含；Linux 产物需要系统 Qt5/glib 运行库（见 `lin
 
 ## License
 
-PulseView: GPL-2.0-or-later；libsigrok / libsigrokdecode: GPL-3.0-or-later。
-分发时请遵守相应许可证。
+本项目整体以 **GNU GPL v3.0 or later** 分发，完整文本见 [LICENSE](LICENSE)。
+
+原因：本项目链接 GPL-3.0-or-later 的 libsigrok / libsigrokdecode；
+PulseView 部分原许可证为 GPL-2.0-or-later。分发二进制时请同时遵守上游项目的
+版权与许可证。
