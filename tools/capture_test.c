@@ -25,6 +25,7 @@ static uint64_t nonzero;
 static uint16_t first_samples[8];
 static int first_count;
 static int adc_mode;
+static int trigger_count;
 static uint64_t adc_count;
 static double adc_min = 1e9, adc_max = -1e9;
 static float adc_first[4];
@@ -82,6 +83,9 @@ static void datafeed_cb(const struct sr_dev_inst *sdi,
 		}
 		break;
 	}
+	case SR_DF_TRIGGER:
+		trigger_count++;
+		break;
 	case SR_DF_END:
 		got_end = TRUE;
 		break;
@@ -161,6 +165,11 @@ int main(int argc, char *argv[])
 			      g_variant_new_uint64(threshold));
 	}
 
+	if (getenv("CAPTURE_CHANNELS")) {
+		sr_config_set(sdi, NULL, SR_CONF_NUM_LOGIC_CHANNELS,
+			      g_variant_new_uint64(strtoull(getenv("CAPTURE_CHANNELS"), NULL, 0)));
+	}
+
 	if (getenv("CAPTURE_ADC")) {
 		adc_mode = 1;
 		sr_config_set(sdi, NULL, SR_CONF_PATTERN_MODE,
@@ -177,6 +186,24 @@ int main(int argc, char *argv[])
 	}
 	sr_session_datafeed_callback_add(session, datafeed_cb, NULL);
 	sr_session_dev_add(session, sdi);
+
+	if (getenv("CAPTURE_TRIGGER")) {
+		struct sr_trigger *trig = sr_trigger_new("test");
+		struct sr_trigger_stage *stage = sr_trigger_stage_add(trig);
+		struct sr_channel *ch = NULL;
+		GSList *cl, *channels = sr_dev_inst_channels_get(sdi);
+
+		for (cl = channels; cl; cl = cl->next) {
+			struct sr_channel *c = cl->data;
+			if (c->index == 0) { ch = c; break; }
+		}
+		/* sr_dev_inst_channels_get() returns the device's own list; do not free it. */
+		if (ch && stage) {
+			sr_trigger_match_add(stage, ch, SR_TRIGGER_ZERO, 0);
+			sr_session_trigger_set(session, trig);
+			fprintf(stderr, "trigger: D0 == 0\n");
+		}
+	}
 
 	fprintf(stderr, "capturing %llu samples @ %llu Hz ...\n",
 		(unsigned long long)want_samples, (unsigned long long)rate);
@@ -202,6 +229,7 @@ int main(int argc, char *argv[])
 			printf(" %.3f", adc_first[i]);
 		printf("\n");
 	}
+	printf("trigger_packets=%d\n", trigger_count);
 	printf("first samples:");
 	for (i = 0; i < first_count; i++)
 		printf(" %04x", first_samples[i]);

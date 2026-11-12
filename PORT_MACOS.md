@@ -496,7 +496,7 @@ srd_decoder_searchpath_add(pd.toUtf8().constData());
 | P0 构建打通 | ✅ 完成 | `./macos/build.sh --clean` 一键全量构建成功；`LogicAnalyzer.app` 生成；132 个解码器加载 |
 | P1 驱动核心 | ✅ 完成 | 应用列出设备；`bcdUSB=0x0300`、USB3、firmware=2/hardware=1；反复启动稳定 |
 | P2 数据通路 | ✅ 核心完成 | 逻辑：1MHz / 50MHz / 200MHz 均可采集；4MB × 8 在飞下 200MHz × 100M 样本 = 200MB，0.771s（≈251MB/s），无 overflow 标志。ADC：1MHz × 100k 样本输出 0.548–1.486V，证明数据通路真实 |
-| P3 热插拔 + IAP | 🟡 部分 | 轮询热插拔代码已接入；IAP 尚未用固件实测 |
+| P3 热插拔 + IAP | 🟡 部分 | 轮询热插拔代码已接入；IAP 尚未用固件实测。另修复 `NUM_LOGIC_CHANNELS` 的 int32/uint64 类型不匹配，8 通道模式实测正常（1 字节/样本） |
 | P4 打包 | 🟡 本机可用 | `.app` 内置 libsigrok*/解码器，ad-hoc 签名；Qt/brew 依赖仍走系统路径 |
 
 **待验证（需要硬件配合）**：

@@ -123,10 +123,10 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 		src = l->data;
 		switch (src->key) {
 		case SR_CONF_NUM_LOGIC_CHANNELS:
-			num_logic_channels = g_variant_get_int32(src->data);
+			num_logic_channels = (int)g_variant_get_uint64(src->data);
 			break;
 		case SR_CONF_NUM_ANALOG_CHANNELS:
-			num_analog_channels = g_variant_get_int32(src->data);
+			num_analog_channels = (int)g_variant_get_uint64(src->data);
 			break;
 		case SR_CONF_LIMIT_FRAMES:
 			limit_frames = g_variant_get_uint64(src->data);
