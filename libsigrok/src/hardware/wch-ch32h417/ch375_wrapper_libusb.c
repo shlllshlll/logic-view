@@ -29,10 +29,10 @@
 
 #define CH375_MAX_DEV 16
 #define CH375_NUM_PIPES 4          /* index 1..3 used */
-#define CH375_XFERS_PER_PIPE 16    /* in-flight bulk transfers per data pipe */
+#define CH375_XFERS_PER_PIPE 8    /* in-flight bulk transfers per data pipe */
 
 #define CH375_MIN_CHUNK (64 * 1024)
-#define CH375_MAX_CHUNK (1024 * 1024)
+#define CH375_MAX_CHUNK (4 * 1024 * 1024)
 
 #define CH375_NOTIFY_INTERVAL_US (300 * 1000)
 

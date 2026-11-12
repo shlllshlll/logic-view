@@ -154,8 +154,12 @@ int main(int argc, char *argv[])
 	sr_config_set(sdi, NULL, SR_CONF_LIMIT_SAMPLES,
 		      g_variant_new_uint64(want_samples));
 	/* Same default as the UI: 2.3 V threshold (DAC value 33). */
-	sr_config_set(sdi, NULL, SR_CONF_THRESHOLD_VALUE_1,
-		      g_variant_new_uint64(33));
+	{
+		const char *thr = getenv("CAPTURE_THRESHOLD");
+		uint64_t threshold = thr ? strtoull(thr, NULL, 0) : 33;
+		sr_config_set(sdi, NULL, SR_CONF_THRESHOLD_VALUE_1,
+			      g_variant_new_uint64(threshold));
+	}
 
 	if (getenv("CAPTURE_ADC")) {
 		adc_mode = 1;

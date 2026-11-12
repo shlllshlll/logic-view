@@ -179,6 +179,105 @@ static void probe_protocol(IOUSBHostDevice *dev, io_service_t device_svc)
 	[intf destroy];
 }
 
+
+/* ---- raw logic capture (diagnostic, bypasses libsigrok) ------------------ */
+
+static int send_cmd(IOUSBHostPipe *ep, uint8_t cmd, uint8_t len, const uint8_t *data)
+{
+	uint8_t pkt[64] = {0};
+	NSError *err = nil;
+	NSUInteger sent = 0;
+
+	pkt[0] = cmd;
+	pkt[1] = len;
+	if (len && data)
+		memcpy(&pkt[2], data, len);
+
+	NSMutableData *d = [NSMutableData dataWithBytes:pkt length:sizeof(pkt)];
+	return [ep sendIORequestWithData:d
+	                bytesTransferred:&sent
+	               completionTimeout:1000
+	                           error:&err] ? 1 : 0;
+}
+
+static int read_resp(IOUSBHostPipe *ep, uint8_t *out, NSUInteger *got)
+{
+	NSError *err = nil;
+	NSMutableData *d = [NSMutableData dataWithLength:32];
+
+	if (![ep sendIORequestWithData:d
+	              bytesTransferred:got
+	             completionTimeout:2000
+	                         error:&err])
+		return 0;
+	memcpy(out, d.bytes, MIN(*got, (NSUInteger)32));
+	return 1;
+}
+
+static void probe_capture(IOUSBHostDevice *dev, io_service_t device_svc)
+{
+	NSError *err = nil;
+	IOUSBHostInterface *intf;
+	IOUSBHostPipe *ep_out = nil, *ep_in = nil, *ep_data = nil;
+	uint8_t resp[32];
+	NSUInteger got = 0;
+	uint8_t params[2] = {0x10, 0x00};   /* 16-bit, divider 0 (200 MHz) */
+	uint8_t level[2] = {0x00, 0x21};    /* DAC value 33 */
+
+	if (![dev configureWithValue:1 error:&err])
+		fprintf(stderr, "configure: %s\n", err.localizedDescription.UTF8String);
+	usleep(300000);
+
+	intf = find_interface(device_svc);
+	if (!intf) { fprintf(stderr, "no interface\n"); return; }
+
+	ep_out = [intf copyPipeWithAddress:0x01 error:&err];
+	ep_in = [intf copyPipeWithAddress:0x81 error:&err];
+	ep_data = [intf copyPipeWithAddress:0x82 error:&err];
+	if (!ep_out || !ep_in || !ep_data) {
+		fprintf(stderr, "pipe open failed: %s\n",
+		        err.localizedDescription.UTF8String ?: "unknown");
+		[intf destroy];
+		return;
+	}
+
+	send_cmd(ep_out, 0xA3, 0, NULL);            /* stop */
+	usleep(50000);
+	send_cmd(ep_out, 0xA0, 2, params);         /* set logic params */
+	read_resp(ep_in, resp, &got);
+	printf("0xA0 -> 0x%02x len=%u status=0x%02x\n",
+	       resp[0], resp[1], resp[2]);
+	send_cmd(ep_out, 0xA1, 2, level);          /* threshold */
+	read_resp(ep_in, resp, &got);
+	printf("0xA1 -> 0x%02x len=%u status=0x%02x\n",
+	       resp[0], resp[1], resp[2]);
+	send_cmd(ep_out, 0xA4, 0, NULL);           /* get logic params */
+	read_resp(ep_in, resp, &got);
+
+	send_cmd(ep_out, 0xA2, 0, NULL);           /* start */
+	usleep(20000);
+
+	NSMutableData *buf = [NSMutableData dataWithLength:512 * 1024];
+	if ([ep_data sendIORequestWithData:buf
+	                  bytesTransferred:&got
+	                 completionTimeout:3000
+	                             error:&err]) {
+		const uint8_t *p = buf.bytes;
+		NSUInteger nz = 0;
+		for (NSUInteger i = 0; i < got; i++)
+			if (p[i]) nz++;
+		printf("raw capture: %lu bytes, nonzero=%lu\n",
+		       (unsigned long)got, (unsigned long)nz);
+		hexdump(p, MIN(got, (NSUInteger)64));
+	} else {
+		fprintf(stderr, "data read failed: %s\n",
+		        err.localizedDescription.UTF8String ?: "unknown");
+	}
+
+	send_cmd(ep_out, 0xA3, 0, NULL);           /* stop */
+	[intf destroy];
+}
+
 int main(int argc, char *argv[])
 {
 	uint32_t vid = 0x1a86, pid = 0x5537;
@@ -187,10 +286,14 @@ int main(int argc, char *argv[])
 	io_service_t svc;
 	int found = 0;
 	int do_version = 0;
+	int do_capture = 0;
 
-	for (int i = 1; i < argc; i++)
+	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--version"))
 			do_version = 1;
+		if (!strcmp(argv[i], "--capture"))
+			do_capture = 1;
+	}
 
 	if (argc >= 3 && argv[1][0] != '-') {
 		vid = (uint32_t)strtoul(argv[1], NULL, 0);
@@ -266,6 +369,8 @@ int main(int argc, char *argv[])
 
 			if (do_version)
 				probe_protocol(dev, svc);
+			if (do_capture)
+				probe_capture(dev, svc);
 
 			[dev destroy];
 			IOObjectRelease(svc);
