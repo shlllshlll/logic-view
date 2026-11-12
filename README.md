@@ -43,7 +43,7 @@ Linux 构建路径和 GitHub Actions 三平台 CI。
 | 平台 | 构建命令 | 产物 | 状态 |
 |---|---|---|---|
 | Windows | `./build.sh --package`（MSYS2 MINGW64） | `dist/LogicAnalyzer/`（含 DLL/Python/解码器） | 保留原路径，CI 构建 |
-| macOS | `./macos/build.sh` | `build/pulseview/LogicAnalyzer.app` | 已实测：枚举/版本/200MHz/ADC/8·16 通道/IAP/热插拔 |
+| macOS | `./macos/build.sh --bundle` | `build/pulseview/LogicAnalyzer.app`（自包含） | 已实测：枚举/版本/200MHz/ADC/8·16 通道/IAP/热插拔 |
 | Linux | `./linux/build.sh` | `dist/LogicAnalyzer-linux-<arch>.tar.gz` | 复用 libusb 后端，CI 构建 |
 
 > Linux 与 macOS 共用 `ch375_wrapper_libusb.c`；Linux 侧额外提供 udev 规则与桌面文件。
@@ -65,7 +65,7 @@ Linux 构建路径和 GitHub Actions 三平台 CI。
 
 ```bash
 ./macos/install_deps.sh   # 首次：Homebrew 依赖（qt@5 / glibmm@2.66 / libusb / ...）
-./macos/build.sh --clean  # 构建四个组件 + LogicAnalyzer.app
+./macos/build.sh --clean --bundle  # 构建 + 把 Qt/Python/glib 等全部打包进 .app
 open build/pulseview/LogicAnalyzer.app
 ```
 
@@ -74,6 +74,10 @@ open build/pulseview/LogicAnalyzer.app
 ```bash
 ditto build/pulseview/LogicAnalyzer.app /Applications/LogicAnalyzer.app
 ```
+
+`--bundle` 会把 Qt5、Python.framework、glib/boost/libusb 等依赖复制进
+`Contents/Frameworks` 并改写路径；产物约 120MB，运行时不依赖 Homebrew。
+构建阶段仍然需要 Homebrew 的 `qt@5`、`python@3.14` 等。
 
 ## Linux 构建
 
@@ -104,8 +108,8 @@ tar -xzf dist/LogicAnalyzer-linux-$(uname -m).tar.gz
 - `workflow_dispatch`：手动触发三平台构建，产物上传为 Actions artifacts；
 - `push` tag `v*`：三平台构建完成后自动创建 GitHub Release 并上传压缩包。
 
-macOS 产物是 ad-hoc 签名的 `.app`，未公证；首次打开可能需要右键“打开”。
-CI 产物的运行依赖与各平台构建依赖一致（macOS 需要 Homebrew 的 Qt5/glib/Python）。
+macOS 产物是 ad-hoc 签名的自包含 `.app`，未公证；首次打开可能需要右键“打开”。
+Windows 产物自包含；Linux 产物需要系统 Qt5/glib 运行库（见 `linux/README.md`）。
 
 ---
 

@@ -737,3 +737,25 @@ macOS 上该行高度被压成 0，按钮文字互相重叠。现改为：
 
 验证：修复后 App 在恢复 16 通道 + UART 解码器的状态下连续运行 8 秒无崩溃，
 日志不再出现 `Muxer error` / `bad_alloc`。
+
+---
+
+## 18. macOS 自包含打包（2026-11-13）
+
+`./macos/build.sh --bundle` 会在构建后调用 `macos/bundle.sh`，把运行期依赖全部放进
+`LogicAnalyzer.app`：
+
+- `macdeployqt` 复制 Qt frameworks / plugins，并改写路径；
+- `macos/fix_bundle_deps.py` 递归补齐 macdeployqt 漏掉的依赖（例如
+  `libbrotlicommon`、`libmpdec`、OpenSSL、SQLite），改写为
+  `@executable_path/../Frameworks/...`，并删除构建机绝对 rpath；
+- 复制 `Python.framework` + 标准库到 `Contents/Frameworks`；
+  `pulseview/main.cpp` 在 `srd_init()` 前设置 `PYTHONHOME`；
+- 对每个 Mach-O（包括 `lib-dynload/*.so`）重新 ad-hoc 签名；否则 arm64 会以
+  `Code Signature Invalid` 直接 SIGKILL。
+
+产物约 120MB，`otool -L` 不再出现 `/opt/homebrew`；在临时移走 `install/` 的情况下，
+已用 bundle 内的 Python 加载 131 个解码器、打开设备并设置 200MHz/16 通道。
+
+系统自带的 `/usr/bin/python3` 只是 Xcode CLT shim，没有 `Python.framework`、开发头文件和
+稳定标准库，不能用于嵌入，因此运行时 Python 由 bundle 自带。

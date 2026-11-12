@@ -24,8 +24,8 @@ jobs:
           brew install cmake ninja pkgconf qt@5 glibmm@2.66 "libsigc++@2" \
             glib boost libusb hidapi libzip python@3.14
 
-      - name: Build
-        run: ./macos/build.sh --clean
+      - name: Build (self-contained bundle)
+        run: ./macos/build.sh --clean --bundle
 
       - name: Package
         run: |
@@ -138,6 +138,7 @@ jobs:
             ### Artifacts
             - **Windows**: self-contained zip (DLLs, Python, protocol decoders).
             - **Linux**: tar.gz; install Qt5/glib runtime packages and the udev rule from `linux/README.md`.
-            - **macOS**: ad-hoc signed `.app`; currently requires the Homebrew runtime
-              dependencies listed in `macos/deps.txt` (Qt5, glibmm, Python, ...).
+            - **macOS**: self-contained ad-hoc signed `.app` (Qt5, Python,
+              glib/boost and protocol decoders are inside the bundle).
+              No Homebrew installation is needed at runtime.
               Right-click → Open on first launch if Gatekeeper blocks it.

@@ -39,6 +39,7 @@
 #include <QCheckBox>
 #include <QDebug>
 #include <QFile>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QMessageBox>
@@ -361,6 +362,22 @@ int main(int argc, char *argv[])
 	do {
 
 #ifdef ENABLE_DECODE
+#ifdef __APPLE__
+		// A bundled app carries Python.framework; tell CPython where its
+		// standard library lives before libsigrokdecode initializes it.
+		{
+			const QString py_root = QCoreApplication::applicationDirPath() +
+				"/../Frameworks/Python.framework/Versions";
+			QDir py_versions(py_root);
+			const QStringList versions = py_versions.entryList(
+				QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+			if (!versions.isEmpty()) {
+				qputenv("PYTHONHOME", py_versions.filePath(versions.last()).toUtf8());
+				qputenv("PYTHONNOUSERSITE", "1");
+			}
+		}
+#endif
+
 		// Decoders shipped inside LogicAnalyzer.app/Contents/Resources/decoders.
 		const char *decoder_path = nullptr;
 #if defined(__APPLE__) || defined(__linux__)

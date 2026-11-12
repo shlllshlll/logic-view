@@ -724,7 +724,7 @@ if(APPLE)
 		MACOSX_BUNDLE_SHORT_VERSION_STRING "${PV_VERSION_STRING}"
 		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in"
 		MACOSX_BUNDLE_ICON_FILE "logicanalyzer.icns"
-		INSTALL_RPATH "@executable_path/../Frameworks;${CMAKE_INSTALL_PREFIX}/lib"
+		INSTALL_RPATH "@executable_path/../Frameworks"
 		BUILD_WITH_INSTALL_RPATH TRUE)
 
 	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

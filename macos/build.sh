@@ -4,6 +4,7 @@
 # 用法：
 #   ./macos/build.sh            # 增量构建
 #   ./macos/build.sh --clean    # 清理 build/ install/ 后全量构建
+#   ./macos/build.sh --bundle   # 构建后把 Qt/Python 等依赖打包进 .app
 #
 # 产物：
 #   build/pulseview/LogicAnalyzer.app
@@ -18,9 +19,11 @@ ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
 CLEAN=0
+BUNDLE=0
 for arg in "$@"; do
     case "$arg" in
         --clean) CLEAN=1 ;;
+        --bundle) BUNDLE=1 ;;
         -h|--help)
             sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
@@ -82,6 +85,11 @@ if [ -d "$APP" ]; then
     echo "==> ad-hoc signing"
     codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || \
         echo "warning: codesign failed (app still runs locally)"
+fi
+
+if [ "$BUNDLE" -eq 1 ] && [ -d "$APP" ]; then
+    echo "==> bundling runtime dependencies"
+    "$SCRIPT_DIR/bundle.sh" "$APP"
 fi
 
 echo

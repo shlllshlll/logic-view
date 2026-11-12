@@ -4,6 +4,7 @@
 # Build outputs
 build/
 build_*/
+build-*/
 install/
 dist/
 *.app/
