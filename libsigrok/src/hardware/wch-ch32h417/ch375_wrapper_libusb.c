@@ -959,8 +959,23 @@ int ch375_abort_write(unsigned long index)
 /* hotplug notification                                                     */
 /* -------------------------------------------------------------------------*/
 
+static guint ch375_notify_interval_us(void)
+{
+	const char *ms = g_getenv("CH375_NOTIFY_INTERVAL_MS");
+	long value;
+
+	if (!ms)
+		return CH375_NOTIFY_INTERVAL_US;
+	value = strtol(ms, NULL, 10);
+	if (value <= 0)
+		return CH375_NOTIFY_INTERVAL_US;
+	return (guint)value * 1000;
+}
+
 static gpointer ch375_notify_thread_fn(gpointer arg)
 {
+	guint interval_us = ch375_notify_interval_us();
+
 	(void)arg;
 
 	while (TRUE) {
@@ -989,7 +1004,7 @@ static gpointer ch375_notify_thread_fn(gpointer arg)
 					   : CH375_DEVICE_REMOVE);
 		}
 
-		g_usleep(CH375_NOTIFY_INTERVAL_US);
+		g_usleep(interval_us);
 	}
 
 	return NULL;

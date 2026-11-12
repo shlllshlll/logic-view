@@ -124,15 +124,19 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
+	const char *drv_name = getenv("CAPTURE_DRIVER");
+	if (!drv_name)
+		drv_name = "wch-ch32h417";
+
 	drivers = sr_driver_list(ctx);
 	for (i = 0; drivers[i]; i++) {
-		if (!strcmp(drivers[i]->name, "wch-ch32h417")) {
+		if (!strcmp(drivers[i]->name, drv_name)) {
 			drv = drivers[i];
 			break;
 		}
 	}
 	if (!drv) {
-		fprintf(stderr, "wch-ch32h417 driver not found\n");
+		fprintf(stderr, "%s driver not found\n", drv_name);
 		return 1;
 	}
 	if ((ret = sr_driver_init(ctx, drv)) != SR_OK) {

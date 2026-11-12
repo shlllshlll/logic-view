@@ -343,6 +343,20 @@ static void probe_rates(IOUSBHostDevice *dev, io_service_t device_svc)
 	[intf destroy];
 }
 
+
+/* Force a USB reset, which terminates and re-enumerates the device. */
+static void probe_reset(IOUSBHostDevice *dev)
+{
+	NSError *err = nil;
+
+	printf("resetting device...\n");
+	if ([dev resetWithError:&err])
+		printf("reset issued\n");
+	else
+		fprintf(stderr, "reset failed: %s\n",
+		        err.localizedDescription.UTF8String ?: "unknown");
+}
+
 int main(int argc, char *argv[])
 {
 	uint32_t vid = 0x1a86, pid = 0x5537;
@@ -353,6 +367,7 @@ int main(int argc, char *argv[])
 	int do_version = 0;
 	int do_capture = 0;
 	int do_rates = 0;
+	int do_reset = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--version"))
@@ -361,6 +376,8 @@ int main(int argc, char *argv[])
 			do_capture = 1;
 		if (!strcmp(argv[i], "--rates"))
 			do_rates = 1;
+		if (!strcmp(argv[i], "--reset"))
+			do_reset = 1;
 	}
 
 	if (argc >= 3 && argv[1][0] != '-') {
@@ -441,6 +458,8 @@ int main(int argc, char *argv[])
 				probe_capture(dev, svc);
 			if (do_rates)
 				probe_rates(dev, svc);
+			if (do_reset)
+				probe_reset(dev);
 
 			[dev destroy];
 			IOObjectRelease(svc);

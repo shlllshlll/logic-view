@@ -49,3 +49,4 @@ macos/*.log
 # Local tool binaries
 tools/usb_probe
 tools/capture_test
+tools/hotplug_test
