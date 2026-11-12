@@ -50,6 +50,11 @@
 #include <QCoreApplication>
 
 #include <thread>
+
+#ifdef __APPLE__
+#include <sys/sysctl.h>
+#endif
+
 #include "application.hpp"
 #include "devicemanager.hpp"
 #include "devices/hardwaredevice.hpp"
@@ -98,11 +103,22 @@ MainWindow::MainWindow(QWidget *parent) :
 
 bool MainWindow::checkSystemRequirements()
 {
-	int memFree;
+	int memFree = 8;
+
+#ifdef _WIN32
 	MEMORYSTATUSEX statex;
-	statex.dwLength = sizeof (statex);
+	statex.dwLength = sizeof(statex);
 	GlobalMemoryStatusEx(&statex);
-	memFree = statex.ullAvailPhys * 1.0 / GB;
+	memFree = (int)(statex.ullAvailPhys / (1024ULL * 1024ULL * 1024ULL));
+#elif defined(__APPLE__)
+	{
+		uint64_t total = 0;
+		size_t len = sizeof(total);
+		if (sysctlbyname("hw.memsize", &total, &len, nullptr, 0) == 0)
+			memFree = (int)(total / (1024ULL * 1024ULL * 1024ULL));
+	}
+#endif
+
 	if (memFree < 4){
 		QDialog dialog(nullptr);
 		dialog.setWindowTitle(tr("提示"));

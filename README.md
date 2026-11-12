@@ -43,14 +43,18 @@
 cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe
 ```
 
-## macOS 构建（进行中）
+## macOS 构建
 
-方案与进度见 [PORT_MACOS.md](PORT_MACOS.md)。当前状态：
+方案与进度见 [PORT_MACOS.md](PORT_MACOS.md)。
 
-- [x] 设备枚举/描述符/版本命令已用纯 IOKit 验证（`tools/usb_probe.m`）
-- [ ] 构建依赖（`macos/install_deps.sh`）
-- [ ] libusb USB 后端
-- [ ] 原生构建 + `.app` 打包
+```bash
+./macos/install_deps.sh   # 首次：Homebrew 依赖（qt@5 / glibmm@2.66 / libusb / ...）
+./macos/build.sh          # 构建四个组件 + LogicAnalyzer.app
+open build/pulseview/LogicAnalyzer.app
+```
+
+当前状态：原生构建、libusb 后端、设备枚举/版本/200MHz 采集、`.app` 打包均已打通；
+热插拔代码已接入，IAP 与信号正确性待硬件验证。
 
 验证工具：
 

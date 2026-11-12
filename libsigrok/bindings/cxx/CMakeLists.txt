@@ -65,6 +65,16 @@ set(LIBSIGROKCXX_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/classes.cpp
 )
 
+# Link directories must be declared before the target is created.
+link_directories(
+    ${CMAKE_INSTALL_PREFIX}/lib
+    ${GLIBMM_LIBRARY_DIRS}
+    ${GLIB_LIBRARY_DIRS}
+)
+if(NOT TARGET sigrok AND LIBSIGROK_FOUND)
+    link_directories(${LIBSIGROK_LIBRARY_DIRS})
+endif()
+
 add_library(sigrokcxx SHARED ${LIBSIGROKCXX_SOURCES})
 
 target_link_libraries(sigrokcxx
@@ -72,12 +82,6 @@ target_link_libraries(sigrokcxx
     ${GLIBMM_LIBRARIES}
     ${GLIB_LIBRARIES}
 )
-
-# Ensure linker can find our installed libsigrok
-link_directories(${CMAKE_INSTALL_PREFIX}/lib)
-if(NOT TARGET sigrok AND LIBSIGROK_FOUND)
-    link_directories(${LIBSIGROK_LIBRARY_DIRS})
-endif()
 
 set_target_properties(sigrokcxx PROPERTIES
     OUTPUT_NAME sigrokcxx

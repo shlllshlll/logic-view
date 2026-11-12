@@ -101,6 +101,13 @@ if(NOT LIBSRCXX_FOUND OR NOT LIBSRCXX_VERSION)
 endif()
 pkg_check_modules(PKGDEPS REQUIRED ${PKGDEPS})
 
+if(APPLE)
+	# The USB backend (wrapper) and the IAP dialog link these directly.
+	pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+	pkg_check_modules(HIDAPI REQUIRED hidapi)
+	include_directories(${LIBUSB_INCLUDE_DIRS} ${HIDAPI_INCLUDE_DIRS})
+endif()
+
 set(CMAKE_AUTOMOC TRUE)
 
 find_package(Qt5 5.3 COMPONENTS Core Gui LinguistTools Widgets Svg REQUIRED)
@@ -533,7 +540,9 @@ include_directories(
 )
 
 # MSYS2 MinGW: hidapi has no pkg-config, add include path directly
-include_directories(D:/msys64/mingw64/include/hidapi)
+if(WIN32)
+	include_directories(D:/msys64/mingw64/include/hidapi)
+endif()
 
 if(STATIC_PKGDEPS_LIBS)
 	include_directories(${PKGDEPS_STATIC_INCLUDE_DIRS})
@@ -629,7 +638,9 @@ endif()
 #-------------------------------------------------------------------------------
 
 link_directories(${Boost_LIBRARY_DIRS})
-link_directories(/mingw64/lib)
+if(WIN32)
+	link_directories(/mingw64/lib)
+endif()
 
 set(PULSEVIEW_LINK_LIBS
 	${Boost_LIBRARIES}
@@ -643,7 +654,15 @@ if(STATIC_PKGDEPS_LIBS)
 	list(APPEND PULSEVIEW_LINK_LIBS ${PKGDEPS_STATIC_LDFLAGS})
 else()
 	link_directories(${PKGDEPS_LIBRARY_DIRS})
-	list(APPEND PULSEVIEW_LINK_LIBS "-Wl,-Bdynamic" ${PKGDEPS_LIBRARIES})
+	if(NOT APPLE)
+		list(APPEND PULSEVIEW_LINK_LIBS "-Wl,-Bdynamic")
+	endif()
+	list(APPEND PULSEVIEW_LINK_LIBS ${PKGDEPS_LIBRARIES})
+endif()
+
+if(APPLE)
+	link_directories(${LIBUSB_LIBRARY_DIRS} ${HIDAPI_LIBRARY_DIRS})
+	list(APPEND PULSEVIEW_LINK_LIBS ${LIBUSB_LIBRARIES} ${HIDAPI_LIBRARIES})
 endif()
 
 if(WIN32)
@@ -682,6 +701,31 @@ target_link_libraries(${PROJECT_NAME} ${PULSEVIEW_LINK_LIBS})
 
 # Rename output to LogicAnalyzer.exe
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME LogicAnalyzer)
+
+if(APPLE)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		MACOSX_BUNDLE TRUE
+		MACOSX_BUNDLE_BUNDLE_NAME "LogicAnalyzer"
+		MACOSX_BUNDLE_GUI_IDENTIFIER "org.sigrok.logicanalyzer"
+		MACOSX_BUNDLE_BUNDLE_VERSION "${PV_VERSION_STRING}"
+		MACOSX_BUNDLE_SHORT_VERSION_STRING "${PV_VERSION_STRING}"
+		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in"
+		INSTALL_RPATH "@executable_path/../Frameworks;${CMAKE_INSTALL_PREFIX}/lib"
+		BUILD_WITH_INSTALL_RPATH TRUE)
+
+	add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E make_directory
+			"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Frameworks"
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_INSTALL_PREFIX}/lib/libsigrok.4.dylib"
+			"${CMAKE_INSTALL_PREFIX}/lib/libsigrokcxx.4.dylib"
+			"${CMAKE_INSTALL_PREFIX}/lib/libsigrokdecode.4.dylib"
+			"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Frameworks/"
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+			"${CMAKE_INSTALL_PREFIX}/share/libsigrokdecode/decoders"
+			"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/decoders"
+		COMMENT "Bundling libsigrok* and protocol decoders")
+endif()
 
 if(WIN32 AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 	# Pass -mwindows so that no "DOS box" opens when PulseView is started.

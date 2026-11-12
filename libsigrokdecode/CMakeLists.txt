@@ -9,18 +9,40 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 # Dependencies
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0>=2.32.0)
-pkg_check_modules(PYTHON3 REQUIRED python3>=3.2)
+
+# Python 3 development files.  Homebrew ships python-3.14-embed.pc (which is
+# the one carrying -lpython3.14), while other systems provide python3.pc.
+set(SRD_PYTHON_PKG "")
+foreach(cand python3-embed python3 python-3.14-embed python-3.13-embed python-3.12-embed)
+    pkg_check_modules(PYTHON3 QUIET ${cand})
+    if(PYTHON3_FOUND)
+        set(SRD_PYTHON_PKG "${cand}")
+        break()
+    endif()
+endforeach()
+if(NOT PYTHON3_FOUND)
+    message(FATAL_ERROR
+        "Python 3 development files not found (tried python3-embed, python3, "
+        "python-3.14-embed, python-3.13-embed, python-3.12-embed). "
+        "Set PKG_CONFIG_PATH to the directory containing python3.pc.")
+endif()
+message(STATUS "Using Python pkg-config package: ${SRD_PYTHON_PKG}")
 
 # Platform
 if(WIN32 OR MINGW)
     set(PLATFORM_LIBS ws2_32)
     set(CONF_HOST "x86_64-w64-mingw32")
     add_definitions(-DWIN32_LEAN_AND_MEAN)
-add_definitions(-DDECODERS_DIR="${CMAKE_INSTALL_PREFIX}/share/libsigrokdecode/decoders")
+elseif(APPLE)
+    set(PLATFORM_LIBS m pthread)
+    set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-apple-darwin")
 else()
     set(PLATFORM_LIBS m pthread dl)
     set(CONF_HOST "${CMAKE_SYSTEM_PROCESSOR}-pc-linux-gnu")
 endif()
+
+# Default decoder search path (the app can override at runtime).
+add_definitions(-DDECODERS_DIR="${CMAKE_INSTALL_PREFIX}/share/libsigrokdecode/decoders")
 
 # config.h generation
 set(HAVE_DLFCN_H 0)
@@ -96,6 +118,7 @@ set(LIBSIGROKDECODE_SOURCES
 )
 
 # Library
+link_directories(${GLIB_LIBRARY_DIRS} ${PYTHON3_LIBRARY_DIRS})
 add_library(sigrokdecode SHARED ${LIBSIGROKDECODE_SOURCES})
 
 # Export all symbols on Windows (needed for DLL import lib)

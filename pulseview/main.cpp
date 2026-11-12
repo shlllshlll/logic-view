@@ -361,8 +361,19 @@ int main(int argc, char *argv[])
 	do {
 
 #ifdef ENABLE_DECODE
+		// Decoders shipped inside LogicAnalyzer.app/Contents/Resources/decoders.
+		const char *decoder_path = nullptr;
+#ifdef __APPLE__
+		const QString pd = QCoreApplication::applicationDirPath() +
+				   "/../Resources/decoders";
+		const QByteArray pd_path =
+			QFileInfo::exists(pd) ? pd.toUtf8() : QByteArray();
+		if (!pd_path.isEmpty())
+			decoder_path = pd_path.constData();
+#endif
+
 		// Initialise libsigrokdecode
-		if (srd_init(nullptr) != SRD_OK) {
+		if (srd_init(decoder_path) != SRD_OK) {
 			qDebug() << "ERROR: libsigrokdecode init failed.";
 			break;
 		}

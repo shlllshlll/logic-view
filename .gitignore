@@ -22,7 +22,6 @@ Makefile
 
 # Generated headers
 pulseview/config.h
-libsigrokdecode/version.h
 
 # Qt generated files
 *.qm
@@ -49,3 +48,4 @@ macos/*.log
 
 # Local tool binaries
 tools/usb_probe
+tools/capture_test

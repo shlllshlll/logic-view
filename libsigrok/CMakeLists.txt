@@ -14,8 +14,8 @@ find_package(PkgConfig REQUIRED)
 # glib-2.0 is mandatory
 pkg_check_modules(GLIB REQUIRED glib-2.0>=2.32.0)
 
-# Optional but recommended for CH32H417
-pkg_check_modules(LIBUSB libusb-1.0>=1.0.16)
+# Required by the CH32H417 driver and src/usb.c
+pkg_check_modules(LIBUSB REQUIRED libusb-1.0>=1.0.16)
 pkg_check_modules(LIBSERIALPORT libserialport>=0.1.1)
 pkg_check_modules(LIBZIP libzip>=0.10)
 
@@ -154,6 +154,14 @@ endif()
 # ============================================================================
 # Source files
 # ============================================================================
+
+# The Windows build uses WCH's CH375DLL; other platforms use libusb directly.
+if(WIN32 OR MINGW)
+    set(CH375_WRAPPER_SRC src/hardware/wch-ch32h417/ch375_wrapper.c)
+else()
+    set(CH375_WRAPPER_SRC src/hardware/wch-ch32h417/ch375_wrapper_libusb.c)
+endif()
+
 set(LIBSIGROK_SOURCES
     # Core backend
     src/backend.c
@@ -184,7 +192,7 @@ set(LIBSIGROK_SOURCES
     # Hardware drivers
     src/hardware/wch-ch32h417/api.c
     src/hardware/wch-ch32h417/protocol.c
-    src/hardware/wch-ch32h417/ch375_wrapper.c
+    ${CH375_WRAPPER_SRC}
     src/hardware/demo/api.c
     src/hardware/demo/protocol.c
     # --- End of driver list ---
@@ -286,6 +294,13 @@ set(LIBSIGROK_SOURCES
 # ============================================================================
 # Library target
 # ============================================================================
+link_directories(
+    ${GLIB_LIBRARY_DIRS}
+    ${LIBUSB_LIBRARY_DIRS}
+    ${LIBZIP_LIBRARY_DIRS}
+    ${LIBSERIALPORT_LIBRARY_DIRS}
+)
+
 add_library(sigrok SHARED ${LIBSIGROK_SOURCES})
 
 target_link_libraries(sigrok

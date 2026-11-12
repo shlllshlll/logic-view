@@ -486,9 +486,21 @@ srd_decoder_searchpath_add(pd.toUtf8().constData());
 | **P3 热插拔 + IAP** | 插拔回调、`0xAE` 进 IAP、hidapi 升级 | 插拔 UI 自动更新；固件升级成功（用已知 `.bin` 验证） | 0.5–1 天 |
 | **P4 打包** | `.app`、dylib、解码器、Python、签名 | 双击运行；换一台 Mac（无 brew）也能跑（可选） | 0.5–1 天 |
 
-**独立冒烟测试（P1–P2 之间）**：先写一个不依赖 Qt 的命令行工具，直接用 wrapper API 完成
-`open → get version → set upload → start logic 1MHz → read 1MB → stop`。
-这样能把 USB 问题和 UI 问题隔离开。
+**独立冒烟测试**：`tools/capture_test.c` 已实现，直接走 libsigrok API：
+`open → set rate/limit/threshold → session_start → 收数据 → stop`。
+
+### 当前进展（2026-11-12）
+
+| 阶段 | 状态 | 实测 |
+|---|---|---|
+| P0 构建打通 | ✅ 完成 | `./macos/build.sh --clean` 一键全量构建成功；`LogicAnalyzer.app` 生成；132 个解码器加载 |
+| P1 驱动核心 | ✅ 完成 | 应用列出设备；`bcdUSB=0x0300`、USB3、firmware=2/hardware=1；反复启动稳定 |
+| P2 数据通路 | ✅ 核心完成 | 1MHz / 50MHz / 200MHz 均可采集；200MHz × 100M 样本 = 200MB，耗时 0.794s（≈240MB/s），无 overflow 标志 |
+| P3 热插拔 + IAP | 🟡 部分 | 轮询热插拔代码已接入；IAP 尚未用固件实测 |
+| P4 打包 | 🟡 本机可用 | `.app` 内置 libsigrok*/解码器，ad-hoc 签名；Qt/brew 依赖仍走系统路径 |
+
+**待验证（需要硬件信号）**：当前所有输入悬空，采集数据全 0。需要用一根跳线把某个通道接到
+3.3V/GND 或已知方波，确认电平/采样点正确，并据此校准 200MHz 下的实际采样率与吞吐上限。
 
 ---
 

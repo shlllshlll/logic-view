@@ -266,6 +266,8 @@ void Application::renew_version_info()
 			break;
 		}
 	}
+#ifdef _WIN32
+	/* Legacy CH569 helper; not shipped on macOS. */
 	UpdateFwVersion_ = new QProcess;
 	QString workpath = QApplication::applicationDirPath() + "/res";
     UpdateFwVersion_->setWorkingDirectory(workpath);
@@ -278,6 +280,7 @@ void Application::renew_version_info()
     } else {
         qDebug() << "UpdateFwVersion start fail" << UpdateFwVersion_->state();
     }
+#endif
 	print_version_info();
 }
 
