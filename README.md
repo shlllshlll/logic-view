@@ -7,9 +7,10 @@
 - 132 个 Python 协议解码器
 - 阈值、触发、固件 IAP 升级、中文界面、热插拔
 - 原生支持 Windows / macOS / Linux；USB 传输层在 macOS/Linux 上使用 libusb
+- 设备端固件源码（CH32H417 APP + IAP + WCH 外设库）也在本仓库中
 
-原始工程仅提供 Windows 版（MSYS2 / MinGW64）。本仓库已补齐 macOS 原生构建、应用图标、
-Linux 构建路径和 GitHub Actions 三平台 CI。
+原始工程仅提供 Windows 版上位机。本仓库已补齐 macOS 原生构建、应用图标、
+Linux 构建路径和 GitHub Actions 三平台 CI，并把清理后的设备端固件源码纳入 `firmware/`。
 
 ---
 
@@ -27,6 +28,11 @@ Linux 构建路径和 GitHub Actions 三平台 CI。
 ├── pulseview/                  # Qt5 上位机（PulseView 0.5.0 深度改造）
 ├── macos/                      # macOS 构建脚本与依赖记录
 ├── linux/                      # Linux 构建脚本、udev 规则、桌面文件
+├── firmware/                   # 设备端固件（APP + IAP + WCH 外设库）
+│   ├── CH32H417_Logic_Analyzer_APP/
+│   ├── CH32H417_Logic_Analyzer_IAP/
+│   ├── SRC/                    # WCH 官方外设库 / 启动文件 / 链接脚本
+│   └── tools/make_app_bin.py   # V3F + V5F 合并为 IAP 升级镜像
 ├── tools/                      # 辅助工具（usb_probe、capture_test 等）
 ├── .github/workflows/build.yml # 三平台 CI + tag 自动发布
 ├── attic/                      # 移植前的 .bak 历史备份，不参与构建
@@ -47,6 +53,23 @@ Linux 构建路径和 GitHub Actions 三平台 CI。
 | Linux | `./linux/build.sh` | `dist/LogicAnalyzer-linux-<arch>.tar.gz` | 复用 libusb 后端，CI 构建 |
 
 > Linux 与 macOS 共用 `ch375_wrapper_libusb.c`；Linux 侧额外提供 udev 规则与桌面文件。
+
+---
+
+## 设备端固件（APP + IAP）
+
+固件源码在 [firmware/](firmware/)，保留原工程的目录层级：
+
+- `CH32H417_Logic_Analyzer_APP/`：V3F（上电/唤醒）+ V5F（采集、USB、IAP 命令）双核主程序；
+- `CH32H417_Logic_Analyzer_IAP/`：V3F/V5F 双核 Bootloader；
+- `SRC/`：WCH 官方 CH32H417 外设库、启动文件和链接脚本；
+- `tools/make_app_bin.py`：把 V3F/V5F APP 合并成 IAP 升级镜像。
+
+构建环境是 **MounRiver Studio 2 / riscv-wch-elf-gcc 12.2**，APP 需要先编 V3F 再编 V5F；
+完整步骤、Flash 布局和 UHSIF 闭源库说明见 [firmware/README.md](firmware/README.md)。
+
+> `APP/`、`IAP/`、`SRC/` 必须保持在 `firmware/` 下的兄弟层级，不能单独挪动：
+> `.project` 使用 `PARENT-2-PROJECT_LOC/SRC/...` 这类相对路径引用外设库。
 
 ---
 
@@ -122,8 +145,13 @@ Windows 产物自包含；Linux 产物需要系统 Qt5/glib 运行库（见 `lin
 
 ## License
 
-本项目整体以 **GNU GPL v3.0 or later** 分发，完整文本见 [LICENSE](LICENSE)。
+本项目是**混合许可**仓库，不是所有文件都用同一个许可证：
 
-原因：本项目链接 GPL-3.0-or-later 的 libsigrok / libsigrokdecode；
-PulseView 部分原许可证为 GPL-2.0-or-later。分发二进制时请同时遵守上游项目的
-版权与许可证。
+- **上位机**（`libsigrok/`、`pulseview/`、`libsigrokdecode/`、`macos/`、`linux/`、`tools/`）：
+  **GNU GPL v3.0 or later**，完整文本见 [LICENSE](LICENSE)。因为链接了 GPL-3.0-or-later 的
+  libsigrok / libsigrokdecode；PulseView 部分原为 GPL-2.0-or-later。
+- **设备端固件**（`firmware/`）：**不属于**上述 GPL。作者 Q2H2 与 WCH 的原始条款仍然适用，
+  `libUHSIF.a` 是 WCH 的闭源二进制库。详见 [firmware/NOTICE](firmware/NOTICE) 和
+  [firmware/README.md 第 7 节](firmware/README.md#7-许可提醒)。
+
+分发或商用前请分别确认两部分的授权；本仓库不重新许可固件代码。

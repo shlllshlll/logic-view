@@ -1,0 +1,26 @@
+Firmware license notice
+=======================
+
+The files in this directory are the cleaned CH32H417 Logic Analyzer v2.0
+firmware source tree.  They are included for reference, personal study and
+repair.  They are NOT relicensed under this repository's GPL-3.0-or-later
+license (see the repository-root LICENSE and NOTICE).
+
+Upstream terms, as documented in firmware/README.md section 7:
+
+* Files authored by Q2H2 (ch32h417_logic.c/.h, hardware.c/.h, ...):
+  the original package grants no license; all rights remain with the author
+  unless separate permission is obtained.
+
+* Files authored by WCH: WCH's terms apply; permission is limited to use with
+  WCH microcontrollers.
+
+* Common/libUHSIF.a: a closed-source WCH binary library; no source is
+  available and it cannot be audited or modified.
+
+* USB VID 0x1A86 / PID 0x5537 belong to WCH.  A derivative product should not
+  reuse them.
+
+Redistribution, commercial use, or use of the WCH VID/PID requires permission
+from the respective rights holders.  This notice is informational and is not
+legal advice.

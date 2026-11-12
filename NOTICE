@@ -1,0 +1,23 @@
+License scope notice
+====================
+
+This repository contains components under different licenses.
+
+1. Host software
+   libsigrok/, libsigrokdecode/ (forked), pulseview/, macos/, linux/, tools/
+   are distributed under the GNU General Public License, version 3 or later.
+   See LICENSE.
+
+2. Device firmware
+   firmware/ is NOT covered by the repository's GPL-3.0-or-later license.
+   It contains firmware source from the CH32H417 Logic Analyzer v2.0 project
+   with upstream terms from its authors and WCH.  See firmware/NOTICE and
+   firmware/README.md section 7.
+
+3. Third-party components
+   libUHSIF.a is a closed-source WCH binary.  Qt, libsigrok, libsigrokdecode,
+   PulseView and other dependencies retain their own copyrights and licenses.
+
+This notice is informational and is not legal advice.  Do not redistribute the
+firmware or a product using WCH's USB VID/PID without checking the applicable
+terms and permissions.

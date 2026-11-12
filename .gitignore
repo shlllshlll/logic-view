@@ -43,6 +43,19 @@ __pycache__/
 *.dll
 *.exe
 
+# Firmware build outputs (MounRiver)
+firmware/**/obj/
+firmware/**/.metadata/
+firmware/**/.settings/
+firmware/**/*.d
+firmware/**/*.map
+firmware/**/*.lst
+firmware/**/*.elf
+firmware/**/*.hex
+
+# WCH's closed-source UHSIF library is part of the firmware source tree
+!firmware/CH32H417_Logic_Analyzer_APP/Common/libUHSIF.a
+
 # Local logs
 macos/brew-install.log
 macos/*.log
