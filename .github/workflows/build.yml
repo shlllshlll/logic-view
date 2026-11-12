@@ -134,3 +134,10 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+          append_body: |
+            ### Artifacts
+            - **Windows**: self-contained zip (DLLs, Python, protocol decoders).
+            - **Linux**: tar.gz; install Qt5/glib runtime packages and the udev rule from `linux/README.md`.
+            - **macOS**: ad-hoc signed `.app`; currently requires the Homebrew runtime
+              dependencies listed in `macos/deps.txt` (Qt5, glibmm, Python, ...).
+              Right-click → Open on first launch if Gatekeeper blocks it.
