@@ -121,6 +121,10 @@ set(LIBSIGROKDECODE_SOURCES
 link_directories(${GLIB_LIBRARY_DIRS} ${PYTHON3_LIBRARY_DIRS})
 add_library(sigrokdecode SHARED ${LIBSIGROKDECODE_SOURCES})
 
+
+if(UNIX AND NOT APPLE)
+	set_target_properties(sigrokdecode PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 # Export all symbols on Windows (needed for DLL import lib)
 if(WIN32 OR MINGW)
     set_target_properties(sigrokdecode PROPERTIES LINK_FLAGS "-Wl,--export-all-symbols")

@@ -6,8 +6,10 @@
 - 2 通道 ADC（8/10 bit）
 - 132 个 Python 协议解码器
 - 阈值、触发、固件 IAP 升级、中文界面、热插拔
+- 原生支持 Windows / macOS / Linux；USB 传输层在 macOS/Linux 上使用 libusb
 
-原始工程仅提供 Windows 版（MSYS2 / MinGW64）。本仓库正在补充 **macOS 原生构建**。
+原始工程仅提供 Windows 版（MSYS2 / MinGW64）。本仓库已补齐 macOS 原生构建、应用图标、
+Linux 构建路径和 GitHub Actions 三平台 CI。
 
 ---
 
@@ -19,17 +21,32 @@
 │   └── src/hardware/wch-ch32h417/
 │       ├── api.c               # 设备/配置/扫描
 │       ├── protocol.c          # 命令、采集、触发
-│       └── ch375_wrapper.*     # USB 访问层（Windows: WCH DLL）
+│       ├── ch375_wrapper.c     # Windows: WCH DLL 传输层
+│       └── ch375_wrapper_libusb.c  # macOS/Linux: libusb 传输层
 ├── libsigrokdecode/            # Python 协议解码（decoders/ 下 132 个）
 ├── pulseview/                  # Qt5 上位机（PulseView 0.5.0 深度改造）
 ├── macos/                      # macOS 构建脚本与依赖记录
-├── tools/                      # 辅助工具（usb_probe 等）
+├── linux/                      # Linux 构建脚本、udev 规则、桌面文件
+├── tools/                      # 辅助工具（usb_probe、capture_test 等）
+├── .github/workflows/build.yml # 三平台 CI + tag 自动发布
 ├── attic/                      # 移植前的 .bak 历史备份，不参与构建
-├── PORT_MACOS.md               # macOS 移植方案（两阶段路线图）
+├── PORT_MACOS.md               # macOS 移植记录 / 两阶段路线图
 ├── README_CH32H417.md          # 原 Windows 构建说明
-├── build.sh / setup_env.sh     # 原 Windows 构建脚本
+├── build.sh / setup_env.sh     # Windows（MSYS2）构建脚本
 └── package_installer.sh        # 原 Windows 安装包脚本
 ```
+
+---
+
+## 平台状态
+
+| 平台 | 构建命令 | 产物 | 状态 |
+|---|---|---|---|
+| Windows | `./build.sh --package`（MSYS2 MINGW64） | `dist/LogicAnalyzer/`（含 DLL/Python/解码器） | 保留原路径，CI 构建 |
+| macOS | `./macos/build.sh` | `build/pulseview/LogicAnalyzer.app` | 已实测：枚举/版本/200MHz/ADC/8·16 通道/IAP/热插拔 |
+| Linux | `./linux/build.sh` | `dist/LogicAnalyzer-linux-<arch>.tar.gz` | 复用 libusb 后端，CI 构建 |
+
+> Linux 与 macOS 共用 `ch375_wrapper_libusb.c`；Linux 侧额外提供 udev 规则与桌面文件。
 
 ---
 
@@ -39,8 +56,7 @@
 
 ```bash
 ./setup_env.sh     # 首次：MSYS2 MINGW64 环境
-./build.sh         # 编译
-cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe
+./build.sh --package
 ```
 
 ## macOS 构建
@@ -49,23 +65,47 @@ cd build_cmake/logicanalyzer_build && ./LogicAnalyzer.exe
 
 ```bash
 ./macos/install_deps.sh   # 首次：Homebrew 依赖（qt@5 / glibmm@2.66 / libusb / ...）
-./macos/build.sh          # 构建四个组件 + LogicAnalyzer.app
+./macos/build.sh --clean  # 构建四个组件 + LogicAnalyzer.app
 open build/pulseview/LogicAnalyzer.app
 ```
 
-当前状态：原生构建、libusb 后端、设备枚举/版本/200MHz 采集、`.app` 打包均已打通；
-热插拔代码已接入，IAP 与信号正确性待硬件验证。
-
-验证工具：
+也可以直接安装到 `/Applications`：
 
 ```bash
-clang -fobjc-arc -framework Foundation -framework IOKit -framework IOUSBHost \
-      tools/usb_probe.m -o tools/usb_probe
-./tools/usb_probe --version
+ditto build/pulseview/LogicAnalyzer.app /Applications/LogicAnalyzer.app
 ```
 
-预期输出包含 `1a86:5537`、`bcdUSB=0x0300`、6 个 bulk 端点，以及
-`firmware=2 hardware=1`。
+## Linux 构建
+
+依赖、udev 规则和运行方式见 [linux/README.md](linux/README.md)。简要：
+
+```bash
+./linux/build.sh --clean
+tar -xzf dist/LogicAnalyzer-linux-$(uname -m).tar.gz
+./LogicAnalyzer-linux-$(uname -m)/bin/LogicAnalyzer
+```
+
+---
+
+## 图标
+
+应用图标由 `pulseview/icons/pulseview.svg` 渲染生成：
+
+- macOS：`pulseview/icons/logicanalyzer.icns`
+- Windows：`pulseview/icons/pulseview.ico`（`pulseviewico.rc` 引用）
+- Linux：`pulseview/icons/logicanalyzer-256.png`（安装为 hicolor 图标）
+
+---
+
+## CI / 发布
+
+[.github/workflows/build.yml](.github/workflows/build.yml) 支持：
+
+- `workflow_dispatch`：手动触发三平台构建，产物上传为 Actions artifacts；
+- `push` tag `v*`：三平台构建完成后自动创建 GitHub Release 并上传压缩包。
+
+macOS 产物是 ad-hoc 签名的 `.app`，未公证；首次打开可能需要右键“打开”。
+CI 产物的运行依赖与各平台构建依赖一致（macOS 需要 Homebrew 的 Qt5/glib/Python）。
 
 ---
 

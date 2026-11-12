@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=LogicAnalyzer
+GenericName=Logic Analyzer
+Comment=CH32H417 USB logic analyzer host
+Exec=LogicAnalyzer
+Icon=logicanalyzer
+Terminal=false
+Categories=Development;Electronics;
+Keywords=logic;analyzer;sigrok;ch32h417;oscilloscope;

@@ -77,6 +77,10 @@ endif()
 
 add_library(sigrokcxx SHARED ${LIBSIGROKCXX_SOURCES})
 
+
+if(UNIX AND NOT APPLE)
+	set_target_properties(sigrokcxx PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 target_link_libraries(sigrokcxx
     ${SIGROK_LIBS}
     ${GLIBMM_LIBRARIES}

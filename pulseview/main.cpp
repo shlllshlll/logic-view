@@ -363,9 +363,14 @@ int main(int argc, char *argv[])
 #ifdef ENABLE_DECODE
 		// Decoders shipped inside LogicAnalyzer.app/Contents/Resources/decoders.
 		const char *decoder_path = nullptr;
+#if defined(__APPLE__) || defined(__linux__)
 #ifdef __APPLE__
 		const QString pd = QCoreApplication::applicationDirPath() +
 				   "/../Resources/decoders";
+#else
+		const QString pd = QCoreApplication::applicationDirPath() +
+				   "/../share/libsigrokdecode/decoders";
+#endif
 		const QByteArray pd_path =
 			QFileInfo::exists(pd) ? pd.toUtf8() : QByteArray();
 		if (!pd_path.isEmpty())

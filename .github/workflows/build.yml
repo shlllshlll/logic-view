@@ -1,0 +1,136 @@
+name: Build & Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS (arm64)
+    runs-on: macos-14
+    timeout-minutes: 90
+    env:
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          brew install cmake ninja pkgconf qt@5 glibmm@2.66 "libsigc++@2" \
+            glib boost libusb hidapi libzip python@3.14
+
+      - name: Build
+        run: ./macos/build.sh --clean
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          ditto -c -k --keepParent build/pulseview/LogicAnalyzer.app \
+            "dist/LogicAnalyzer-${{ github.ref_name }}-macos-$(uname -m).zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.zip
+          if-no-files-found: error
+
+  windows:
+    name: Windows (MinGW64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-toolchain
+            mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-pkgconf
+            mingw-w64-x86_64-qt5-static
+            mingw-w64-x86_64-glibmm
+            mingw-w64-x86_64-libsigc++
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-libusb
+            mingw-w64-x86_64-hidapi
+            mingw-w64-x86_64-libzip
+            mingw-w64-x86_64-python
+
+      - name: Build and package
+        run: |
+          export PATH="/mingw64/bin:/mingw64/qt5-static/bin:$PATH"
+          export CMAKE_PREFIX_PATH="/mingw64/qt5-static;/mingw64"
+          ./build.sh --package
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Compress-Archive -Path dist/LogicAnalyzer/* `
+            -DestinationPath "dist/LogicAnalyzer-${{ github.ref_name }}-windows-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+
+  linux:
+    name: Linux (x86_64)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build pkg-config \
+            qtbase5-dev qtbase5-dev-tools libqt5svg5-dev qttools5-dev-tools \
+            libglib2.0-dev libglibmm-2.4-dev libsigc++-2.0-dev \
+            libboost-dev libboost-filesystem-dev libboost-serialization-dev \
+            libboost-system-dev libboost-thread-dev \
+            libusb-1.0-0-dev libhidapi-dev libzip-dev zlib1g-dev python3-dev
+
+      - name: Build and package
+        run: ./linux/build.sh --clean
+
+      - name: Rename tarball
+        run: |
+          for f in dist/LogicAnalyzer-linux-*.tar.gz; do
+            mv "$f" "dist/LogicAnalyzer-${{ github.ref_name }}-linux-x86_64.tar.gz"
+          done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true

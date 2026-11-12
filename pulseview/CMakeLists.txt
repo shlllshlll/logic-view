@@ -106,6 +106,19 @@ if(APPLE)
 	pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 	pkg_check_modules(HIDAPI REQUIRED hidapi)
 	include_directories(${LIBUSB_INCLUDE_DIRS} ${HIDAPI_INCLUDE_DIRS})
+elseif(UNIX AND NOT ANDROID)
+	# Linux uses the same libusb backend; hidapi is either "hidapi"
+	# (Homebrew) or "hidapi-hidraw" (Debian/Ubuntu).
+	pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+	pkg_check_modules(HIDAPI hidapi)
+	if(NOT HIDAPI_FOUND)
+		pkg_check_modules(HIDAPI_HIDRAW REQUIRED hidapi-hidraw)
+		set(HIDAPI_INCLUDE_DIRS ${HIDAPI_HIDRAW_INCLUDE_DIRS})
+		set(HIDAPI_LIBRARY_DIRS ${HIDAPI_HIDRAW_LIBRARY_DIRS})
+		set(HIDAPI_LIBRARIES ${HIDAPI_HIDRAW_LIBRARIES})
+	endif()
+	include_directories(${LIBUSB_INCLUDE_DIRS} ${HIDAPI_INCLUDE_DIRS})
+	link_directories(${LIBUSB_LIBRARY_DIRS} ${HIDAPI_LIBRARY_DIRS})
 endif()
 
 set(CMAKE_AUTOMOC TRUE)
@@ -660,7 +673,7 @@ else()
 	list(APPEND PULSEVIEW_LINK_LIBS ${PKGDEPS_LIBRARIES})
 endif()
 
-if(APPLE)
+if(APPLE OR (UNIX AND NOT ANDROID))
 	link_directories(${LIBUSB_LIBRARY_DIRS} ${HIDAPI_LIBRARY_DIRS})
 	list(APPEND PULSEVIEW_LINK_LIBS ${LIBUSB_LIBRARIES} ${HIDAPI_LIBRARIES})
 endif()
@@ -710,6 +723,7 @@ if(APPLE)
 		MACOSX_BUNDLE_BUNDLE_VERSION "${PV_VERSION_STRING}"
 		MACOSX_BUNDLE_SHORT_VERSION_STRING "${PV_VERSION_STRING}"
 		MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/Info.plist.in"
+		MACOSX_BUNDLE_ICON_FILE "logicanalyzer.icns"
 		INSTALL_RPATH "@executable_path/../Frameworks;${CMAKE_INSTALL_PREFIX}/lib"
 		BUILD_WITH_INSTALL_RPATH TRUE)
 
@@ -724,7 +738,15 @@ if(APPLE)
 		COMMAND ${CMAKE_COMMAND} -E copy_directory
 			"${CMAKE_INSTALL_PREFIX}/share/libsigrokdecode/decoders"
 			"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/decoders"
-		COMMENT "Bundling libsigrok* and protocol decoders")
+		COMMAND ${CMAKE_COMMAND} -E copy_if_different
+			"${CMAKE_CURRENT_SOURCE_DIR}/icons/logicanalyzer.icns"
+			"$<TARGET_BUNDLE_CONTENT_DIR:${PROJECT_NAME}>/Resources/logicanalyzer.icns"
+		COMMENT "Bundling libsigrok*, protocol decoders and app icon")
+endif()
+
+if(UNIX AND NOT APPLE)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		INSTALL_RPATH "$ORIGIN/../lib")
 endif()
 
 if(WIN32 AND NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -742,15 +764,22 @@ install(TARGETS ${PROJECT_NAME} DESTINATION bin/)
 # Install the manpage.
 install(FILES doc/pulseview.1 DESTINATION ${CMAKE_INSTALL_MANDIR}/man1 COMPONENT doc)
 
-# Install the desktop file.
-install(FILES contrib/org.sigrok.PulseView.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
-
-# Install the AppData/AppStream file.
-install(FILES contrib/org.sigrok.PulseView.appdata.xml DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo)
-
-# Install the PulseView icons.
-install(FILES icons/pulseview.png DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48/apps)
-install(FILES icons/pulseview.svg DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps)
+if(UNIX AND NOT APPLE)
+	# Install the LogicAnalyzer desktop entry and icon.
+	install(FILES packaging/logicanalyzer.desktop
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+	install(FILES icons/logicanalyzer-256.png
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps
+		RENAME logicanalyzer.png)
+	install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/../linux/99-logicanalyzer.rules
+		DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/logicanalyzer)
+else()
+	# Keep the upstream PulseView desktop/icon for other platforms.
+	install(FILES contrib/org.sigrok.PulseView.desktop DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications)
+	install(FILES contrib/org.sigrok.PulseView.appdata.xml DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/metainfo)
+	install(FILES icons/pulseview.png DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/48x48/apps)
+	install(FILES icons/pulseview.svg DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/scalable/apps)
+endif()
 
 # Generate Windows installer script.
 configure_file(contrib/pulseview_cross.nsi.in ${CMAKE_CURRENT_BINARY_DIR}/contrib/pulseview_cross.nsi @ONLY)

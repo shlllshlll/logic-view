@@ -14,6 +14,14 @@ BUILD_DIR="${SCRIPT_DIR}/build_cmake"
 PREFIX="${SCRIPT_DIR}/install"
 DIST_DIR="${SCRIPT_DIR}/dist/LogicAnalyzer"
 CLEAN=0
+
+# Detect the MinGW Python version instead of hardcoding 3.14
+PYVER="3.14"
+if [ -x /mingw64/bin/python ]; then
+    PYVER="$(/mingw64/bin/python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || echo 3.14)"
+fi
+PYDLL="libpython${PYVER//./}.dll"
+PYPATH="/mingw64/lib/python${PYVER}"
 PACKAGE=0
 
 # Ensure MinGW tools in PATH on MSYS2
@@ -21,13 +29,21 @@ if [[ "$OSTYPE" == "msys" ]] || [[ -n "$MSYSTEM" ]]; then
     export PATH="/mingw64/bin:/usr/bin:$PATH"
 fi
 
-for arg in "$@"; do
-    case $arg in
+while [ $# -gt 0 ]; do
+    case "$1" in
         --clean) CLEAN=1 ;;
         --package) PACKAGE=1 ;;
-        --prefix) PREFIX="$2"; shift ;;
+        --prefix)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "--prefix needs a value" >&2
+                exit 2
+            fi
+            PREFIX="$1"
+            ;;
+        *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
-    shift 2>/dev/null || true
+    shift
 done
 
 echo "============================================"
@@ -143,7 +159,7 @@ for dll in libglib-2.0-0.dll libglibmm-2.4-1.dll libgobject-2.0-0.dll \
     libsigc-2.0-0.dll libstdc++-6.dll libwinpthread-1.dll \
     libgcc_s_seh-1.dll libgmodule-2.0-0.dll libusb-1.0.dll libhidapi-0.dll \
     libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
-    libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll libpython3.14.dll; do
+    libzip.dll libbz2-1.dll liblzma-5.dll zlib1.dll libzstd.dll $PYDLL; do
     cp "/mingw64/bin/$dll" "$PVDIR/" 2>/dev/null || true
 done
 
@@ -202,17 +218,17 @@ if [ $PACKAGE -eq 1 ]; then
         libusb-1.0.dll libhidapi-0.dll \
         libintl-8.dll libiconv-2.dll libpcre2-8-0.dll libffi-8.dll \
         libzip.dll libbz2-1.dll liblzma-5.dll \
-        zlib1.dll libzstd.dll libpython3.14.dll; do
+        zlib1.dll libzstd.dll $PYDLL; do
         cp "/mingw64/bin/$dll" "$DIST_DIR/" 2>/dev/null || true
     done
 
     # 4. Copy Python standard library (needed for protocol decoders)
     echo "  Python standard library..."
-    PYTHON_SRC="/mingw64/lib/python3.14"
+    PYTHON_SRC="$PYPATH"
     if [ -d "$PYTHON_SRC" ]; then
-        mkdir -p "$DIST_DIR/python-portable/lib/python3.14"
+        mkdir -p "$DIST_DIR/python-portable/lib/python$PYVER"
         if [ -d "$PYTHON_SRC/lib-dynload" ]; then
-            cp -r "$PYTHON_SRC/lib-dynload" "$DIST_DIR/python-portable/lib/python3.14/"
+            cp -r "$PYTHON_SRC/lib-dynload" "$DIST_DIR/python-portable/lib/python$PYVER/"
         fi
         for dir in asyncio collections concurrent ctypes distutils email encodings \
                    html http importlib json lib logging multiprocessing \
@@ -231,7 +247,7 @@ if [ $PACKAGE -eq 1 ]; then
                    struct.py subprocess.py sysconfig.py tempfile.py \
                    textwrap.py threading.py token.py tokenize.py \
                    types.py typing.py uuid.py warnings.py weakref.py; do
-            cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python3.14/" 2>/dev/null || true
+            cp -r "$PYTHON_SRC/$dir" "$DIST_DIR/python-portable/lib/python$PYVER/" 2>/dev/null || true
         done
         echo "    $(find "$DIST_DIR/python-portable" -type f | wc -l) files"
     fi

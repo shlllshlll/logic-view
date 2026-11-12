@@ -1,0 +1,3 @@
+# CH32H417 logic analyzer: allow non-root access to the logic and IAP modes.
+SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="5537", MODE="0666", TAG+="uaccess"
+SUBSYSTEM=="usb", ATTR{idVendor}=="1a86", ATTR{idProduct}=="fe17", MODE="0666", TAG+="uaccess"

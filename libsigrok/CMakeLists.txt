@@ -303,6 +303,10 @@ link_directories(
 
 add_library(sigrok SHARED ${LIBSIGROK_SOURCES})
 
+
+if(UNIX AND NOT APPLE)
+	set_target_properties(sigrok PROPERTIES INSTALL_RPATH "$ORIGIN")
+endif()
 target_link_libraries(sigrok
     ${GLIB_LIBRARIES}
     ${PLATFORM_LIBS}

@@ -52,3 +52,5 @@ tools/capture_test
 tools/hotplug_test
 tools/iap_hid_test
 tools/iap_reboot
+build_cmake/
+*.tar.gz
