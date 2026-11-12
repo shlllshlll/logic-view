@@ -1,0 +1,100 @@
+# macOS 构建依赖记录
+
+- 时间: 2026-11-12 23:24 CST
+- 系统: macOS 27.2 (arm64)
+- Homebrew: 6.0.21
+- 安装命令:
+  `brew install cmake ninja pkgconf qt@5 glibmm@2.66 libsigc++@2 glib boost libusb hidapi libzip python@3.14`
+
+> 说明：首次安装时 `cmake`/`ninja`/`pkgconf` 已存在（cmake 与 pkgconf 被顺带升级）。
+> 后续重装请用 `macos/install_deps.sh`，它会避免升级无关的 dependents。
+
+## 顶层依赖（构建必需）
+
+| formula | 版本 | 用途 |
+|---|---|---|
+| `qt@5` | 5.15.19 | 上位机 UI（keg-only） |
+| `glibmm@2.66` | 2.66.10 | glibmm-2.4 ABI（**不要用 glibmm 2.90**） |
+| `libsigc++@2` | 2.12.2 | glibmm 依赖 |
+| `glib` | 2.90.1 | GLib / GObject |
+| `boost` | 1.92.0_1 | filesystem / serialization / system |
+| `libusb` | 1.0.30 | USB 后端（替换 WCH DLL） |
+| `hidapi` | 0.15.0 | IAP 固件升级（HID） |
+| `libzip` | 1.12.1 | `.sr` 压缩格式 |
+| `python@3.14` | 3.14.10 | 协议解码器 |
+| `cmake` | 4.4.5 | 构建（安装前已存在，4.4.3 → 4.4.5 升级） |
+| `pkgconf` | 3.0.10 | pkg-config（安装前已存在，3.0.6 → 3.0.10 升级） |
+| `ninja` | 1.13.2 | 构建（已存在，未变） |
+
+## 本次新安装的 formula（21 个）
+
+```
+- boost
+- brotli
+- freetype
+- giflib
+- glib
+- glibmm@2.66
+- hidapi
+- howard-hinnant-date
+- icu4c@79
+- jpeg-turbo
+- libpng
+- libsigc++@2
+- libtiff
+- libusb
+- libzip
+- md4c
+- mpdecimal
+- openssl@4
+- python@3.14
+- qt@5
+- webp
+```
+
+## 安装前已存在、被顺带升级的 formula
+
+| formula | 变化 | 说明 |
+|---|---|---|
+| `cmake` | 4.4.3 → 4.4.5 | 主动请求 |
+| `pkgconf` | 3.0.6 → 3.0.10 | 主动请求 |
+| `pcre2` | 10.48 → 10.49 | glib 依赖 |
+| `libunistring` | 升级 | glib 依赖 |
+| `xz` | 5.8.3 → 5.8.4 | boost / libzip 依赖 |
+| `readline` | 升级 | python 依赖 |
+| `sqlite` | 升级 | python 依赖 |
+| `ca-certificates` | 升级 | python 依赖 |
+| `libarchive` | 3.8.9 → 3.8.11 | rpm 依赖 |
+| `libomp` | 升级 | rpm 依赖 |
+| `rpm` | 6.1.0 → 6.1.0_1 | 被 Homebrew 的 dependents 检查升级 |
+| `libsolv` | 0.7.39 → 0.7.41 | 同上 |
+| `micromamba` | 2.9.0 → 2.10.0_2 | 同上 |
+
+这些包安装前就存在，`cleanup_deps.sh` **不会卸载**它们，也无法自动降级。
+
+## 副作用：openssl CLI 被切换到 4.x
+
+安装 `openssl@4`（python@3.14 依赖）时，Homebrew 执行了：
+
+```
+Unlinking /opt/homebrew/Cellar/openssl@3/3.6.4... 6570 symlinks removed.
+```
+
+因此 `/opt/homebrew/bin/openssl` 现在指向 **OpenSSL 4.1.0**，`openssl@3` 仍安装但未链接。
+如果依赖 openssl 3 的命令行工具出现问题，可恢复：
+
+```bash
+brew unlink openssl@4
+brew link --force openssl@3
+```
+
+（不会影响 python@3.14，它用的是自己的 keg 路径。）
+
+## 清理
+
+```bash
+./macos/cleanup_deps.sh --dry-run     # 预览
+./macos/cleanup_deps.sh               # 卸载本次新增的顶层包
+./macos/cleanup_deps.sh --yes --autoremove   # 同时清理孤儿依赖
+./macos/cleanup_deps.sh --yes --build        # 同时删除 build/ install/ dist/
+```

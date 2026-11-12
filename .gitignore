@@ -1,0 +1,51 @@
+# macOS
+.DS_Store
+
+# Build outputs
+build/
+build_*/
+install/
+dist/
+*.app/
+*.dSYM/
+
+# CMake / Ninja
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+CPack*.cmake
+install_manifest.txt
+Makefile
+.ninja_deps
+.ninja_log
+
+# Generated headers
+pulseview/config.h
+libsigrokdecode/version.h
+
+# Qt generated files
+*.qm
+qrc_*.cpp
+*.qrc.depends
+moc_*.cpp
+ui_*.h
+
+# Python
+__pycache__/
+*.pyc
+
+# Compiled objects / libraries
+*.o
+*.a
+*.dylib
+*.so
+*.dll
+*.exe
+
+# Local logs
+macos/brew-install.log
+macos/*.log
+
+# Local tool binaries
+tools/usb_probe
