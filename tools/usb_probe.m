@@ -278,6 +278,71 @@ static void probe_capture(IOUSBHostDevice *dev, io_service_t device_svc)
 	[intf destroy];
 }
 
+
+/* Measure how the firmware's divider byte affects data production rate. */
+static void probe_rates(IOUSBHostDevice *dev, io_service_t device_svc)
+{
+	static const int divs[] = {0, 2, 4, 8, 12, 16, 20, 22, 24};
+	NSError *err = nil;
+	IOUSBHostInterface *intf;
+	IOUSBHostPipe *ep_out, *ep_in, *ep_data;
+	uint8_t resp[32];
+	NSUInteger got = 0;
+	uint8_t level[2] = {0x00, 0x21};
+
+	if (![dev configureWithValue:1 error:&err])
+		fprintf(stderr, "configure: %s\n", err.localizedDescription.UTF8String);
+	usleep(300000);
+
+	intf = find_interface(device_svc);
+	if (!intf) { fprintf(stderr, "no interface\n"); return; }
+	ep_out = [intf copyPipeWithAddress:0x01 error:&err];
+	ep_in = [intf copyPipeWithAddress:0x81 error:&err];
+	ep_data = [intf copyPipeWithAddress:0x82 error:&err];
+	if (!ep_out || !ep_in || !ep_data) { [intf destroy]; return; }
+
+	send_cmd(ep_out, 0xA3, 0, NULL);
+	usleep(50000);
+	send_cmd(ep_out, 0xA1, 2, level);
+	read_resp(ep_in, resp, &got);
+
+	printf("%-5s %-10s %-10s %-10s\n", "div", "bytes", "MB/s", "MS/s(16b)");
+	for (size_t i = 0; i < sizeof(divs) / sizeof(divs[0]); i++) {
+		uint8_t params[2] = {0x10, (uint8_t)divs[i]};
+		NSUInteger total = 0;
+		NSDate *t0;
+		double elapsed;
+
+		send_cmd(ep_out, 0xA3, 0, NULL);
+		usleep(30000);
+		send_cmd(ep_out, 0xA0, 2, params);
+		read_resp(ep_in, resp, &got);
+		send_cmd(ep_out, 0xA2, 0, NULL);
+
+		t0 = [NSDate date];
+		while ([(NSDate *)t0 timeIntervalSinceNow] > -0.5) {
+			NSMutableData *buf = [NSMutableData dataWithLength:1024 * 1024];
+			if (![ep_data sendIORequestWithData:buf
+			                  bytesTransferred:&got
+			                 completionTimeout:500
+			                             error:&err])
+				break;
+			total += got;
+			if (got == 0)
+				break;
+		}
+		elapsed = -[(NSDate *)t0 timeIntervalSinceNow];
+		send_cmd(ep_out, 0xA3, 0, NULL);
+
+		printf("%-5d %-10lu %-10.1f %-10.2f\n", divs[i],
+		       (unsigned long)total,
+		       elapsed > 0 ? total / elapsed / 1e6 : 0.0,
+		       elapsed > 0 ? total / elapsed / 2e6 : 0.0);
+	}
+
+	[intf destroy];
+}
+
 int main(int argc, char *argv[])
 {
 	uint32_t vid = 0x1a86, pid = 0x5537;
@@ -287,12 +352,15 @@ int main(int argc, char *argv[])
 	int found = 0;
 	int do_version = 0;
 	int do_capture = 0;
+	int do_rates = 0;
 
 	for (int i = 1; i < argc; i++) {
 		if (!strcmp(argv[i], "--version"))
 			do_version = 1;
 		if (!strcmp(argv[i], "--capture"))
 			do_capture = 1;
+		if (!strcmp(argv[i], "--rates"))
+			do_rates = 1;
 	}
 
 	if (argc >= 3 && argv[1][0] != '-') {
@@ -371,6 +439,8 @@ int main(int argc, char *argv[])
 				probe_protocol(dev, svc);
 			if (do_capture)
 				probe_capture(dev, svc);
+			if (do_rates)
+				probe_rates(dev, svc);
 
 			[dev destroy];
 			IOObjectRelease(svc);
