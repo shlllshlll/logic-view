@@ -53,7 +53,7 @@ void Hardware(void)
     Delay_Ms(100);
     VDDI8_IO_Change();                                                          /* Turn off VDDIO-1.8V power supply */
     Get_Flash_Size();                                                           /* Get FLASH size for IAP upgrade */
-    RCC_HB2PeriphClockCmd(RCC_HB2Periph_GPIOF | RCC_HB2Periph_HSADC, ENABLE);   /* Enable ADC clock */
+    RCC_HB2PeriphClockCmd(BOARD_ADC_GPIO_CLK | RCC_HB2Periph_HSADC, ENABLE);    /* Enable ADC GPIO & HSADC clock */
     RCC_HSADCCLKConfig(RCC_HSADCSource_PLLCLK);                                 /* Enable ADC PLL */
     /* USB initialization */
     USB_Timer_Init();

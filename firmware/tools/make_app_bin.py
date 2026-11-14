@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-把 V3F / V5F 两份 APP 固件合并成 IAP 升级用的 CH32H417_Logic_Analyzer_APP.bin。
+把 V3F / V5F 两份 APP 固件合并成 IAP 升级用的 APP.bin。
 
 布局（相对 Flash 0x00006000，IAP 的 FLASH_Base）：
     偏移 0x00000  V3F APP   (Flash 0x00006000)
     偏移 0x1A000  V5F APP   (Flash 0x00020000)   = 0x20000 - 0x6000
     空隙用 0xFF 填充，文件尾部补齐到 16 字节对齐
 
+V3F 那份只负责唤醒 V5F，与板型无关，两个板型共用同一个 bin。
+
 用法：
-    python3 tools/make_app_bin.py
-    python3 tools/make_app_bin.py --v3f <path> --v5f <path> --out <path>
+    python3 tools/make_app_bin.py                       # 输出 ..._APP.bin
+    python3 tools/make_app_bin.py --board weu6          # 输出 ..._APP_WEU6.bin
+    python3 tools/make_app_bin.py --board qeu6          # 输出 ..._APP_QEU6.bin
+    python3 tools/make_app_bin.py --v5f <path> --out <path>
 """
 
 import argparse
@@ -27,13 +31,19 @@ def main():
     app = os.path.join(root, "CH32H417_Logic_Analyzer_APP")
 
     ap = argparse.ArgumentParser()
+    ap.add_argument("--board", choices=["weu6", "qeu6"],
+                    help="板型；仅用于决定输出文件名，固件本身要按对应变体编译")
     ap.add_argument("--v3f", default=os.path.join(app, "V3F", "obj",
                                                  "CH32H417_Logic_Analyzer_V3F.bin"))
     ap.add_argument("--v5f", default=os.path.join(app, "V5F", "obj",
                                                  "CH32H417_Logic_Analyzer_V5F.bin"))
-    ap.add_argument("--out", default=os.path.join(app, "V5F", "obj",
-                                                 "CH32H417_Logic_Analyzer_APP.bin"))
+    ap.add_argument("--out")
     args = ap.parse_args()
+
+    if args.out is None:
+        suffix = ("_" + args.board.upper()) if args.board else ""
+        args.out = os.path.join(app, "V5F", "obj",
+                                "CH32H417_Logic_Analyzer_APP%s.bin" % suffix)
 
     for p in (args.v3f, args.v5f):
         if not os.path.exists(p):
@@ -53,6 +63,7 @@ def main():
     with open(args.out, "wb") as f:
         f.write(buf)
 
+    print("板型 : %s" % (args.board or "未指定"))
     print("V3F  : %6d 字节  -> 偏移 0x%05X (Flash 0x%05X)" % (len(v3f), 0, BASE_ADDR))
     print("V5F  : %6d 字节  -> 偏移 0x%05X (Flash 0x%05X)" % (len(v5f), off, V5F_ADDR))
     print("合并 : %6d 字节  -> %s" % (size, args.out))

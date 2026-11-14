@@ -20,6 +20,7 @@
 ├── CH32H417_Logic_Analyzer_APP/          APP（逻辑分析仪主程序）
 │   ├── CH32H417_Logic_Analyzer.wvsln
 │   ├── Common/                           ★ 作者原创代码都在这里
+│   │   ├── board_config.h                ★ 板型配置（WEU6 / QEU6），见 4.1
 │   │   ├── ch32h417_logic.c / .h         采集 + USB 上传 + IAP 命令（897 行）
 │   │   ├── ch32h417_uhsif.c / .h         UHSIF 应用层（WCH 例程改）
 │   │   ├── hardware.c / .h               上电初始化（69 行）
@@ -50,7 +51,12 @@
 | 修改 | `APP/V5F/*.wvproj`：同上，两处（C / C++ linker）+ 移除 `.d` 残留条目 |
 | 修改 | `APP/V3F/*.wvproj`：移除对不存在的 `ch32h417_uhsif_it.c` 的引用 |
 | 修改 | `APP/V3F/.cproject`：移除 `excluding` 里对 `ch32h417_uhsif_it.c` 的排除项 |
-| 未动 | 所有 `.c` / `.h` / `.S` / `.ld` 源码，一个字节都没改 |
+| 新增 | `Common/board_config.h`：WEU6 / QEU6 两套板型宏 |
+| 修改 | `Common/ch32h417_logic.c`：DAC / ADC / LED / 共用电源改为读板型宏 |
+| 修改 | `Common/ch32h417_uhsif.c`：数据总线 remap、水线改为读板型宏 |
+| 修改 | `Common/ch32h417_logic.h`：版本宏改为 `SW=0x03` + `HW=BOARD_HW_VERSION` |
+| 修改 | `Common/hardware.c`：ADC 端口时钟改用板型宏 |
+| 未动 | 其余 `.c` / `.h` / `.S` / `.ld` 源码，一个字节都没改 |
 
 IAP 工程的 4 个文件**完全没有改动**——它本来就完整。
 
@@ -100,15 +106,53 @@ IAP 工程的 4 个文件**完全没有改动**——它本来就完整。
 2. **先编 V3F，再编 V5F**
    - `V3F/obj/CH32H417_Logic_Analyzer_V3F.bin`（约 10.8 KB）
    - `V5F/obj/CH32H417_Logic_Analyzer_V5F.bin`（约 26.1 KB）
-3. 合并出升级镜像：
+3. **合并是 MRS 自动做的**，不需要额外脚本：
+   `V5F/CH32H417_Logic_Analyzer_V5F.wvproj` 里配了双核合并（`kernel.mate = "../V3F"`，
+   `mergedOptions.enabled = true`，`filledWith = "0xFF"`），编 V5F 时会读取
+   `../V3F/obj/CH32H417_Logic_Analyzer_V3F.hex` 并输出唯一的
+   `V5F/obj/CH32H417_Logic_Analyzer_APP.bin`。
+   这也是**必须先编 V3F** 的原因——否则合并进去的是旧的 hex。
 
-   ```bash
-   python3 tools/make_app_bin.py
-   # -> CH32H417_Logic_Analyzer_APP/V5F/obj/CH32H417_Logic_Analyzer_APP.bin
-   ```
+   `tools/make_app_bin.py` 只是这个合并过程的手工复现（输出与 MRS 的产物字节完全一致），
+   用于 CI 或没有 MRS 的环境，正常用 MRS 时不需要它。
 
-   这个合并文件**工程里没有自动后处理步骤**（作者包里那份应该是手动做的），
-   脚本已验证与作者发布的 `CH32H417_Logic_Analyzer_APP.bin` **字节完全一致**。
+> ⚠️ 不要用 MRS 的 Download 按钮直接烧这个合并 bin：`flashConfig.address` 写的是
+> `0x08000000`，而合并 bin 的内容其实从 Flash `0x6000` 开始。日常升级走 IAP 上位机流程。
+
+---
+
+## 4.1 板型变体：一次源码，两个 bin
+
+板型差异全部集中在 `CH32H417_Logic_Analyzer_APP/Common/board_config.h`，通过编译宏切换：
+
+| | `BOARD_WEU6`（默认） | `-DBOARD_QEU6` |
+|---|---|---|
+| 适用硬件 | CH32H417_Mini（WEU6，已验证） | QEU6 版（作者未验证） |
+| UHSIF 数据总线 | `DEF_UHSIF_PINREMAP0` | `DEF_UHSIF_PINREMAP2` |
+| UHSIF 水线 | 0 | 1 |
+| DAC（VIOH / 阈值） | PA5 / DAC2 | PA4 / DAC1 |
+| 模拟输入 | PC2 / PC3（HSADC2/3） | PF8 / PF9（HSADC4/5） |
+| LED | PB0 / PB1 | PB3 / PB4 |
+| 逻辑与模拟共用 IO 电源 | 是（开 ADC 要把 VIOH 顶到 3.3V） | 否 |
+| 上报 `HARDWARE_VERSION` | `0x01` | `0x02` |
+
+`SOFTWARE_VERSION` 统一为 `0x03`（25 档采样 + 10-bit ADC 修复 + 溢出上报）。
+上位机按 `HARDWARE_VERSION` 选默认 `adc_ratio`、按 `SOFTWARE_VERSION` 决定可用采样率档数。
+
+### 编两个 bin 的步骤
+
+1. 直接编（不带任何宏）→ WEU6 版 `APP.bin`，改名为 `..._APP_WEU6.bin`；
+2. 工程属性 → C/C++ Build → Settings → Preprocessor → Defined symbols 加 `BOARD_QEU6`，
+   `Clean` 后重新编 V5F（V3F 不用重编，它没有板型相关代码）→ 得到 `..._APP_QEU6.bin`；
+3. 验证时把宏去掉，恢复默认。
+
+V3F 那份只负责唤醒 V5F，与板型无关，两个板型共用同一个 V3F bin（合并时可以直接复用）。
+
+### 共用电源的行为（只对 WEU6 生效）
+
+`HSADC_Function_Start()` 会先把 VIOH 顶到 3.3V，`HSADC_Function_Stop()` 再把用户设的
+逻辑阈值恢复回去。因此 **WEU6 打开模拟采集时，16 路逻辑输入的阈值会一起变成 3.3V**，
+不能同时使用「1.8V 逻辑 + 3.3V 模拟」。QEU6 版 `BOARD_SHARED_RAIL = 0`，跳过这两步。
 
 ---
 
@@ -145,6 +189,12 @@ IAP 的 `FLASH_Base = 0x08006000`、`User_APP_Addr_offset = 0x6000`，
 - ✅ `libUHSIF.a` 与缺失 `.o` 的导出符号、外部依赖符号逐一比对一致
 - ✅ `tools/make_app_bin.py` 输出与作者发布产物字节一致
 - ✅ 目录内无任何遗留 `.o/.d/.map/.lst/.elf/.hex/.bin`
+- ✅ 两套板型宏经 `clang -E` 预处理核对，展开值分别落在各自的引脚上：
+      WEU6 → PA5/DAC2、PC2/PC3、HSADC2/3、PB0/PB1、remap0、水线0；
+      QEU6 → PA4/DAC1、PF8/PF9、HSADC4/5、PB3/PB4、remap2、水线1
+- ✅ `ch32h417_logic.c` / `ch32h417_uhsif.c` / `hardware.c` 在两种宏下
+      `clang -fsyntax-only` 均 0 error（用 stub 头文件替代 newlib）
+- ✅ 上位机侧 `libsigrok` 改动已实际编译并链接通过（macOS，glib 2.90）
 
 **没做**：真实的完整编译。这台 Mac 上没有 WCH 的 `riscv-wch-elf-gcc`
 （MRS 只有 Windows/Linux 版），且在 macOS 上装通用 RISC-V GCC 会因为

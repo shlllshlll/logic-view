@@ -10,6 +10,7 @@
  * microcontroller manufactured by Nanjing Qinheng Microelectronics.
  *******************************************************************************/
 #include "ch32H417_uhsif.h"
+#include "board_config.h"
 #include "ch32h417_logic.h"
 #include "ch32h417_usbss_device.h"
 
@@ -27,14 +28,14 @@ void UHSIF_Init(void)
     UHSIF_Para_Init();
 
     /* For the UHSIF pin initialization, the host needs to configure the frequency division coefficient */
-    UHSIF_GPIO_Init(DEF_UHSIF_SLAVE_FPGA_MODE, DEF_UHSIF_PINREMAP2, DEF_UHSIF_CLKREMAP1, 2, DEF_UHSIF_DATA_BIT16);    // Divide 400M HSI by 2 to get 200M
+    UHSIF_GPIO_Init(DEF_UHSIF_SLAVE_FPGA_MODE, BOARD_UHSIF_PINREMAP, DEF_UHSIF_CLKREMAP1, 2, DEF_UHSIF_DATA_BIT16);    // Divide 400M HSI by 2 to get 200M
 
     /* Initialization of UHSIF-related registers */
     UHSIF_Cfg();
 
     /* UHSIF line and buff initialization */
-    UHSIF_Line_Cfg(DEF_LINE0, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th0_Buf, 1);
-    UHSIF_Line_Cfg(DEF_LINE1, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th1_Buf, 1);
+    UHSIF_Line_Cfg(DEF_LINE0, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th0_Buf, BOARD_UHSIF_WATERMARK);
+    UHSIF_Line_Cfg(DEF_LINE1, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th1_Buf, BOARD_UHSIF_WATERMARK);
 
     /* UHSIF enabled */
     UHSIF_Start(ENABLE);
@@ -65,14 +66,14 @@ void UHSIF_Set_Para(uint8_t logic_bit, uint8_t logic_div)
     UHSIF_Para_Init();
 
     /* For the UHSIF pin initialization, the host needs to configure the frequency division coefficient */
-    UHSIF_GPIO_Init(DEF_UHSIF_SLAVE_FPGA_MODE, DEF_UHSIF_PINREMAP2, DEF_UHSIF_CLKREMAP1, logic_div, logic_set);    // Divide 400M HSI by 2 to get 200M
+    UHSIF_GPIO_Init(DEF_UHSIF_SLAVE_FPGA_MODE, BOARD_UHSIF_PINREMAP, DEF_UHSIF_CLKREMAP1, logic_div, logic_set);    // Divide 400M HSI by 2 to get 200M
 
     /* Initialization of UHSIF-related registers */
     UHSIF_Cfg();
 
     /* UHSIF line and buff initialization */
-    UHSIF_Line_Cfg(DEF_LINE0, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th0_Buf, 1);
-    UHSIF_Line_Cfg(DEF_LINE1, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th1_Buf, 1);
+    UHSIF_Line_Cfg(DEF_LINE0, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th0_Buf, BOARD_UHSIF_WATERMARK);
+    UHSIF_Line_Cfg(DEF_LINE1, DEF_LINE_DIR_IN, DEF_BUFF_COUNT_8, USBSS_EP2_Tx_Th1_Buf, BOARD_UHSIF_WATERMARK);
 }
 
 /*******************************************************************************

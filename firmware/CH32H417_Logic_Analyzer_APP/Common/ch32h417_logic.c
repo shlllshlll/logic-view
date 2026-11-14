@@ -8,6 +8,7 @@
  ********************************************************************************/
 #include <string.h>
 #include "ch32h417_logic.h"
+#include "board_config.h"
 #include "ch32h417_it.h"
 #include "ch32h417_uhsif.h"
 #include "ch32h417_usb.h"
@@ -199,6 +200,25 @@ void Set_Logic_Para_Fun(uint8_t logic_bit, uint8_t logic_sys)
 }
 
 /*********************************************************************
+ * @fn      DAC_Write
+ *
+ * @brief   Write DAC data into the channel selected by board config.
+ *          WCH 库只提供按通道分开的接口，这里包一层，板型差异不外泄。
+ *
+ * @param   dac_value  12-bit DAC value
+ *
+ * @return  none
+ */
+static void DAC_Write(uint16_t dac_value)
+{
+#if (BOARD_DAC_CH_NUM == 2)
+    DAC_SetChannel2Data(DAC_Align_12b_R, dac_value);
+#else
+    DAC_SetChannel1Data(DAC_Align_12b_R, dac_value);
+#endif
+}
+
+/*********************************************************************
  * @fn      Dac_Init
  *
  * @brief   Initializes dac collection.
@@ -213,17 +233,17 @@ void Dac_Init(void)
     RCC_HB2PeriphClockCmd(RCC_HB2Periph_GPIOA, ENABLE);
     RCC_HB1PeriphClockCmd(RCC_HB1Periph_DAC, ENABLE);
 
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+    GPIO_InitStructure.GPIO_Pin = BOARD_DAC_PIN;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-    GPIO_Init(GPIOA, &GPIO_InitStructure);
+    GPIO_Init(BOARD_DAC_PORT, &GPIO_InitStructure);
 
     DAC_InitType.DAC_Trigger = DAC_Trigger_None;
     DAC_InitType.DAC_WaveGeneration = DAC_WaveGeneration_None;
     DAC_InitType.DAC_LFSRUnmask_TriangleAmplitude = DAC_LFSRUnmask_Bit0;
     DAC_InitType.DAC_OutputBuffer = DAC_OutputBuffer_Enable;
-    DAC_Init(DAC_Channel_1, &DAC_InitType);
-    DAC_Cmd(DAC_Channel_1, ENABLE);
-    DAC_SetChannel1Data(DAC_Align_12b_R, 34);    // Default output 0, voltage 3.3V
+    DAC_Init(BOARD_DAC_CH, &DAC_InitType);
+    DAC_Cmd(BOARD_DAC_CH, ENABLE);
+    DAC_Write(34);                               // Default output 0, voltage 3.3V
 }
 
 /*********************************************************************
@@ -235,7 +255,7 @@ void Dac_Init(void)
  */
 void DAC_OUT(uint16_t dac_value)
 {
-    DAC_SetChannel1Data(DAC_Align_12b_R, dac_value);
+    DAC_Write(dac_value);
 }
 
 /*********************************************************************
@@ -248,17 +268,21 @@ void HSADC_Function_Init(void)
 {
     HSADC_InitTypeDef HSADC_InitStructure = { 0 };
     GPIO_InitTypeDef GPIO_InitStructure = { 0 };
+
+    /* GPIOF 在 hardware.c 里已经开过；这里统一再开一次，保证 GPIOC 板型也生效 */
+    RCC_HB2PeriphClockCmd(BOARD_ADC_GPIO_CLK | RCC_HB2Periph_HSADC, ENABLE);
+
     if(logic_adc_info.adc_channel == ADC_CHANNEL0)
     {
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_8;
+        GPIO_InitStructure.GPIO_Pin = BOARD_ADC_PIN0;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-        GPIO_Init(GPIOF, &GPIO_InitStructure);
+        GPIO_Init(BOARD_ADC_PORT, &GPIO_InitStructure);
     }
     else if(logic_adc_info.adc_channel == ADC_CHANNEL1)
     {
-        GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+        GPIO_InitStructure.GPIO_Pin = BOARD_ADC_PIN1;
         GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-        GPIO_Init(GPIOF, &GPIO_InitStructure);
+        GPIO_Init(BOARD_ADC_PORT, &GPIO_InitStructure);
     }
     HSADC_InitStructure.HSADC_BurstMode = ENABLE;
         if(logic_adc_info.adc_bit == ADC_GET_WIDTH8)
@@ -290,11 +314,11 @@ void HSADC_Function_Init(void)
     HSADC_Init(&HSADC_InitStructure);
     if(logic_adc_info.adc_channel == ADC_CHANNEL0)
     {
-        HSADC_ChannelConfig(HSADC_Channel_4);
+        HSADC_ChannelConfig(BOARD_HSADC_CH0);
     }
     else if(logic_adc_info.adc_channel == ADC_CHANNEL1)
     {
-        HSADC_ChannelConfig(HSADC_Channel_5);
+        HSADC_ChannelConfig(BOARD_HSADC_CH1);
     }
     NVIC_EnableIRQ(HSADC_IRQn);
     NVIC_SetPriority(HSADC_IRQn, 2);
@@ -315,6 +339,12 @@ void HSADC_Function_Init(void)
  */
 void HSADC_Function_Start(void)
 {
+#if BOARD_SHARED_RAIL
+    /* 共用 IO 电源的板子（WEU6）：ADC 需要 0~3.3V 量程，先把 VIOH 顶到 3.3V。
+       副作用是 16 路逻辑输入的阈值也一起变成 3.3V，这是硬件决定的。 */
+    DAC_Write(34);
+    Delay_Ms(10);
+#endif
     UHSIF_Clock_Set(RCC_PLLMUL16);    // Configure system PLL clock, 400M system clock 26-05-09
     HSADC_Function_Init();
     HSADC_Cmd(ENABLE);
@@ -340,6 +370,10 @@ void HSADC_Function_Stop(void)
     RCC_HB2PeriphResetCmd(RCC_HB2Periph_HSADC, ENABLE);
     Delay_Ms(10);
     RCC_HB2PeriphResetCmd(RCC_HB2Periph_HSADC, DISABLE);
+#if BOARD_SHARED_RAIL
+    /* 共用 IO 电源的板子：ADC 停止后把用户设置的逻辑阈值恢复回去 */
+    DAC_OUT(logic_adc_info.logic_level);
+#endif
 }
 
 /*********************************************************************
@@ -365,7 +399,7 @@ void LOGIC_Para_Init(void)
     logic_adc_info.adc_channel = 0;
     logic_adc_info.adc_flag = 0;
     logic_adc_info.usb_ram_over_flag = 0;
-    GPIO_InitStructure.GPIO_Pin = GPIO_Pin_3 | GPIO_Pin_4;      //usb link && usb trans
+    GPIO_InitStructure.GPIO_Pin = BOARD_LED_PINS;               //usb link && usb trans
     GPIO_InitStructure.GPIO_Speed = GPIO_Speed_Very_High;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;              
     GPIO_Init(GPIOB, &GPIO_InitStructure);

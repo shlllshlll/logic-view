@@ -14,6 +14,7 @@ extern "C"
 #endif
 
 #include "ch32h417.h"
+#include "board_config.h"
 #include "debug.h"
 
 #define pLogic_Para         ((PLOGIC_PARA)USBSS_EP1_Rx_Buf)     /* Logic analyzer RX command buffer */
@@ -38,8 +39,16 @@ extern "C"
 #define CMD_GET_VERSION     0xAC                                                /* Get firmware version */
 #define CMD_SET_IAP         0xAE                                                /* IAP upgrade command */
 
-#define SOFTWARE_VERSION    0x00
-#define HARDWARE_VERSION    0x02
+/* 版本号语义（上位机按这两个字段做能力判断）：
+ *   SOFTWARE_VERSION : 功能/协议版本
+ *        0x00/0x02 = 旧固件
+ *        0x03      = 统一固件：25 档采样 + 10bit ADC 修复 + 溢出上报
+ *   HARDWARE_VERSION : 板型
+ *        0x01 = WEU6 Mini（模拟直采、逻辑与模拟共用 IO 电源）
+ *        0x02 = QEU6（带分压、模拟供电独立）
+ */
+#define SOFTWARE_VERSION    0x03
+#define HARDWARE_VERSION    BOARD_HW_VERSION
 
 #define LOGIC_RAM_OVER      0x01                                                /* Logic RAM overflow */
 #define ADC_RAM_OVER        0x02                                                /* ADC RAM overflow */
