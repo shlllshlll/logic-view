@@ -614,6 +614,54 @@ SR_PRIV int ch32h417_get_fw_version(const struct sr_dev_inst *sdi)
 	return SR_OK;
 }
 
+/*
+ * 按固件上报的版本号设置板型相关默认值。
+ *
+ *   fw_version = (SOFTWARE_VERSION << 8) | HARDWARE_VERSION
+ *
+ *   HARDWARE_VERSION 决定板型默认值：
+ *     0x01 WEU6 Mini —— 模拟直采、无分压，满量程 3.3V，adc_ratio 应为 1.0
+ *     0x02 QEU6      —— 带 1.53:1 分压，满量程约 5V，adc_ratio 用 0.6526
+ *
+ *   SOFTWARE_VERSION 决定能力集：
+ *     >= 0x03 才实现 0x10~0x18 这 9 档低速采样率，老固件只认 0x00~0x0F。
+ *     不裁剪的话，选 50M 及以下会被固件 default 分支静默当成 100M。
+ */
+SR_PRIV void ch32h417_apply_board_defaults(struct sr_dev_inst *sdi)
+{
+	struct dev_context *devc = sdi->priv;
+	uint8_t hw;
+	uint8_t sw;
+
+	if (devc->fw_version == 0) {
+		sr_warn("Firmware version unavailable, keeping defaults.");
+		return;
+	}
+
+	sw = (devc->fw_version >> 8) & 0xFF;
+	hw = devc->fw_version & 0xFF;
+
+	switch (hw) {
+	case BOARD_HW_WEU6_MINI:
+		devc->adc_ratio = 1.0f;
+		sr_info("Board WEU6 Mini (Sw%u Hw%u): adc_ratio=1.000, "
+			"analog sampling forces VIOH to 3.3V", sw, hw);
+		break;
+	case BOARD_HW_QEU6:
+		devc->adc_ratio = 0.6526f;
+		sr_info("Board QEU6 (Sw%u Hw%u): adc_ratio=0.6526", sw, hw);
+		break;
+	default:
+		sr_warn("Unknown hardware version 0x%02x, keeping defaults.", hw);
+		return;
+	}
+
+	if (sw < FW_SW_SAMPLERATE_25 && devc->num_samplerates > 16) {
+		devc->num_samplerates = 16;
+		sr_info("Legacy firmware (Sw%u): limited to 16 samplerates.", sw);
+	}
+}
+
 static int acquisition_check_cb(int fd, int revents, void *cb_data)
 {
 	struct sr_dev_inst *sdi = cb_data;

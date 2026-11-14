@@ -121,6 +121,16 @@
 #define DEV_CAPS_ADC            (1 << 1)
 #define DEV_CAPS_ADC_10BIT      (1 << 2)
 
+/*
+ * 板型 —— 对应固件 CMD_GET_VERSION 应答里的 HARDWARE_VERSION 字节。
+ * 固件侧见 board_config.h：WEU6 报 0x01，QEU6 报 0x02。
+ */
+#define BOARD_HW_WEU6_MINI      0x01    /* 模拟直采无分压，逻辑与模拟共用 IO 电源 */
+#define BOARD_HW_QEU6           0x02    /* 带 1.53:1 分压，模拟供电独立 */
+
+/* 固件 SOFTWARE_VERSION >= 该值才支持 25 档采样率 */
+#define FW_SW_SAMPLERATE_25     0x03
+
 /* 工作模式 */
 enum ch32h417_mode {
 	MODE_LOGIC_ANALYZER,
@@ -269,6 +279,7 @@ SR_PRIV int ch32h417_stop_adc(const struct sr_dev_inst *sdi);
 SR_PRIV struct dev_context *ch32h417_dev_new(void);
 SR_PRIV gboolean ch32h417_detect_usb_speed(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_get_fw_version(const struct sr_dev_inst *sdi);
+SR_PRIV void ch32h417_apply_board_defaults(struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_acquisition_start(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_acquisition_stop(const struct sr_dev_inst *sdi);
 SR_PRIV int ch32h417_enter_iap(const struct sr_dev_inst *sdi);

@@ -362,6 +362,10 @@ static int dev_open(struct sr_dev_inst *sdi)
 		devc->cur_samplerate = devc->samplerates[0];
 	}
 
+	/* 读一次固件版本，按板型/功能版本设置默认值（adc_ratio、可用采样率档数） */
+	ch32h417_get_fw_version(sdi);
+	ch32h417_apply_board_defaults(sdi);
+
 	/* 设置默认采样率 */
 	if (devc->cur_samplerate == 0)
 	{
@@ -562,6 +566,9 @@ static int config_set(uint32_t key, GVariant *data,
 		}
 
 		devc->cur_samplerate = devc->samplerates[0];
+
+		/* 切回逻辑模式会重建采样率表，这里重新套一遍板型限制 */
+		ch32h417_apply_board_defaults((struct sr_dev_inst *)sdi);
 
 		sr_info("Device mode set to %s", mode_names[devc->mode]);
 	}
