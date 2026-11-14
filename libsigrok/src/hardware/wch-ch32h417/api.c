@@ -308,10 +308,29 @@ static GSList *scan(struct sr_dev_driver *di, GSList *options)
 	return std_scan_complete(di, devices);
 }
 
-/* 清理设备 */
+/*
+ * 清理设备。
+ *
+ * 除了释放 sdi，还要把本驱动开着的 USB 句柄关掉。扫描阶段就会 open 设备
+ * （为了读描述符），如果这里不关，设备只被扫到、从没连过的情况下句柄会一直
+ * 泄漏，拔插之后下一次 scan 还会复用到这个死句柄。
+ */
+static void dev_clear_private(void *priv)
+{
+	struct dev_context *devc = priv;
+
+	if (!devc || !devc->device_handle ||
+	    devc->device_handle == CH375_INVALID_HANDLE)
+		return;
+
+	sr_info("dev_clear: closing device at index %d", devc->device_index);
+	ch375_close_device(devc->device_index);
+	devc->device_handle = NULL;
+}
+
 static int dev_clear(const struct sr_dev_driver *di)
 {
-	return std_dev_clear(di);
+	return std_dev_clear_with_callback(di, dev_clear_private);
 }
 
 /* 打开设备 */

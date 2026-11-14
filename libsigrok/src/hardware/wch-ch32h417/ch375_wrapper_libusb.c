@@ -72,6 +72,10 @@ struct ch375_dev {
 	int refcount;
 	gboolean open;
 
+	/* 打开时记下总线地址：拔插后用它判断缓存句柄是否已经失效 */
+	uint8_t bus;
+	uint8_t addr;
+
 	unsigned long wtimeout;
 	unsigned long rtimeout;
 
@@ -161,6 +165,66 @@ static int count_matching_devices(void)
 	}
 	libusb_free_device_list(list, 1);
 	return count;
+}
+
+/*
+ * 判断 (bus, addr) 上是否还插着我们的设备。
+ *
+ * 用来识别"缓存句柄指向的设备已经拔掉"这种情况：拔插后设备的 bus/addr
+ * 会变，旧句柄再也打不开，但 wrapper 里 dev->open 仍然是 TRUE，于是每次
+ * scan 都会把这个死句柄原样返回给调用方。
+ *
+ * 注意只按当前设备列表比对，不去碰旧句柄本身（对已拔出的句柄调用
+ * libusb_get_device() 是未定义行为）。
+ */
+static gboolean device_present_at(uint8_t bus, uint8_t addr)
+{
+	libusb_device **list;
+	ssize_t n, i;
+	gboolean found = FALSE;
+
+	n = libusb_get_device_list(NULL, &list);
+	if (n < 0)
+		return FALSE;
+
+	for (i = 0; i < n; i++) {
+		struct libusb_device_descriptor desc;
+
+		if (libusb_get_device_descriptor(list[i], &desc) != 0)
+			continue;
+		if (!device_matches(&desc))
+			continue;
+		if (libusb_get_bus_number(list[i]) == bus &&
+		    libusb_get_device_address(list[i]) == addr) {
+			found = TRUE;
+			break;
+		}
+	}
+
+	libusb_free_device_list(list, 1);
+	return found;
+}
+
+/*
+ * 句柄是否还连着一台在插的设备。
+ *
+ * 只信 NO_DEVICE / NOT_FOUND 这两个明确的"设备没了"，其它错误（BUSY、超时等）
+ * 当作还活着，避免把正常使用的设备误关掉。拔插后 USB 地址可能被复用，
+ * 光比对 bus/addr 不够，所以还要走一次真正的 USB 请求。
+ */
+static gboolean ch375_handle_alive(struct ch375_dev *dev)
+{
+	int cfg = 0;
+	int ret;
+
+	if (!dev->handle)
+		return FALSE;
+
+	ret = libusb_get_configuration(dev->handle, &cfg);
+	if (ret == 0)
+		return TRUE;
+
+	return !(ret == LIBUSB_ERROR_NO_DEVICE || ret == LIBUSB_ERROR_NOT_FOUND);
 }
 
 static void dev_init(struct ch375_dev *dev, unsigned int index)
@@ -467,6 +531,22 @@ void *ch375_open_device(unsigned long index)
 	if (!ch375_loaded)
 		return CH375_INVALID_HANDLE;
 
+	/*
+	 * 缓存句柄可能指向已经拔掉的设备。这里先校验一次，失效就关掉重开；
+	 * 否则拔插之后每次 scan 都会拿到同一个死句柄，界面就只剩幽灵设备。
+	 */
+	if (index < CH375_MAX_DEV && ch375_devs_initialized &&
+	    ch375_devs[index].open) {
+		struct ch375_dev *cached = &ch375_devs[index];
+
+		if (!device_present_at(cached->bus, cached->addr) ||
+		    !ch375_handle_alive(cached)) {
+			sr_info("device %lu at bus %u addr %u is gone, dropping stale handle",
+				index, cached->bus, cached->addr);
+			ch375_close_device(index);
+		}
+	}
+
 	g_mutex_lock(&ch375_global_lock);
 	dev_init_all();
 	dev = dev_by_index(index);
@@ -476,7 +556,14 @@ void *ch375_open_device(unsigned long index)
 	}
 
 	if (dev->open) {
-		dev->refcount++;
+		/*
+		 * 返回缓存的句柄，但不再增加引用计数。
+		 *
+		 * 每次 scan() 都会调一次这里，如果每次都 ++，refcount 会随扫描次数
+		 * 一路涨上去，之后 dev_close() / IAP 升级里的 ch375_close_device()
+		 * 只是把计数减一，句柄其实一直没关 —— 界面以为设备已关闭，macOS 那边
+		 * 接口却还被占着，设备重枚举就会拖到十几秒甚至失败。
+		 */
 		g_mutex_unlock(&ch375_global_lock);
 		return dev;
 	}
@@ -504,6 +591,8 @@ void *ch375_open_device(unsigned long index)
 
 	dev->handle = handle;
 	dev->desc = desc;
+	dev->bus = libusb_get_bus_number(libusb_get_device(handle));
+	dev->addr = libusb_get_device_address(libusb_get_device(handle));
 	dev->open = TRUE;
 	dev->refcount = 1;
 	dev->event_stop = FALSE;
@@ -512,9 +601,7 @@ void *ch375_open_device(unsigned long index)
 	g_mutex_unlock(&ch375_global_lock);
 
 	sr_info("opened %04x:%04x on bus %u address %u",
-		desc.idVendor, desc.idProduct,
-		libusb_get_bus_number(libusb_get_device(handle)),
-		libusb_get_device_address(libusb_get_device(handle)));
+		desc.idVendor, desc.idProduct, dev->bus, dev->addr);
 	return dev;
 }
 
@@ -552,6 +639,8 @@ void ch375_close_device(unsigned long index)
 		dev->handle = NULL;
 	}
 	dev->open = FALSE;
+	dev->bus = 0;
+	dev->addr = 0;
 	g_mutex_unlock(&ch375_global_lock);
 
 	sr_info("closed device %lu", index);
