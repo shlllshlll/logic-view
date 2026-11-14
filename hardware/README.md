@@ -8,6 +8,17 @@
 立创EDA 专业版 → `文件` → `打开` → 选择 `.epro2` 文件；也可以直接双击该文件
 （需要已安装立创EDA 专业版）。
 
+## 克隆说明
+
+`.epro2` 是 deflate 压缩包，Git 无法做 delta，每改一版就是完整新增 1 MB 左右，
+所以用 **Git LFS** 管理（规则见仓库根目录 `.gitattributes`）。没装 Git LFS 时，
+克隆下来的是一个 132 字节的指针文件，打开会失败：
+
+```bash
+brew install git-lfs && git lfs install   # 一次性
+git lfs pull                              # 已有仓库里补拉
+```
+
 ## 与固件的对应关系
 
 板型通过固件编译宏区分，差异全部收在
