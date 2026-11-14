@@ -850,28 +850,21 @@ void IAPWorker::do_work()
 
     update_progress(15, tr("查找HID设备..."));
 
-    for (int i = 0; i < 10; i++) {
-        QThread::msleep(100);
-        {
-            QMutexLocker locker(&mutex_);
-            if (cancelled_) {
-                log(tr("用户取消升级"));
-                close_hid();
-                Q_EMIT finished(false);
-                return;
-            }
-        }
-    }
+    /*
+     * 发完 0xAE 后，设备要先把 USB 从采集设备的形态重枚举成 IAP 的 HID
+     * （0x1A86:0xFE17）。macOS 上这一步经常要十几秒，经过 hub 更慢；以前
+     * 只等约 6 秒，而且 configure_iap_device() 只在开头调一次，赶不上设备
+     * 出现就直接判失败——表现出来就是进度条卡在 15%。
+     *
+     * 这里按时间轮询 30 秒，并把 SET_CONFIGURATION 和 hid_open 放进同一个
+     * 循环：macOS 不会自动配置 vendor 类设备，没配置过 IOHIDManager 就看不到
+     * 它的 HID 接口，hid_open() 必然失败。
+     */
+    const int wait_timeout_ms = 30000;
+    const int poll_step_ms = 500;
+    int waited_ms = 0;
 
-#ifdef __APPLE__
-    /* macOS: make the IAP HID interface visible before hid_open(). */
-    if (!configure_iap_device(iap_vid_, iap_pid_))
-        log(tr("USB配置失败，继续尝试HID..."));
-    QThread::msleep(300);
-#endif
-
-    int retry_count = 0;
-    while (retry_count < 10) {
+    while (waited_ms < wait_timeout_ms) {
         {
             QMutexLocker locker(&mutex_);
             if (cancelled_) {
@@ -883,15 +876,30 @@ void IAPWorker::do_work()
         }
 
         if (init_hid()) {
+            log(tr("找到IAP设备（等待 %1 秒）").arg(waited_ms / 1000.0, 0, 'f', 1));
             break;
         }
-        retry_count++;
-        log(tr("等待HID设备... (%1/10)").arg(retry_count));
-        QThread::msleep(500);
+
+#ifdef __APPLE__
+        if (waited_ms % 1000 == 0 &&
+            configure_iap_device(iap_vid_, iap_pid_) && waited_ms > 0)
+            log(tr("IAP设备已出现，正在配置 USB 接口..."));
+#endif
+
+        if (waited_ms > 0 && waited_ms % 5000 == 0)
+            log(tr("仍在等待IAP设备... %1 秒").arg(waited_ms / 1000));
+
+        /* 15% → 19% 缓慢推进，避免看起来卡死 */
+        update_progress(15 + (waited_ms * 4) / wait_timeout_ms,
+                        tr("等待IAP设备... %1 秒").arg(waited_ms / 1000));
+
+        QThread::msleep(poll_step_ms);
+        waited_ms += poll_step_ms;
     }
 
     if (!hid_handle_) {
-        log(tr("无法找到IAP HID设备"));
+        log(tr("%1 秒内未找到IAP HID设备").arg(wait_timeout_ms / 1000));
+        log(tr("提示：设备此时多半已经进入 IAP 模式，再点一次“开始升级”通常就能成功"));
         Q_EMIT finished(false);
         return;
     }

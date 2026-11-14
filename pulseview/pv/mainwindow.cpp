@@ -650,12 +650,21 @@ void MainWindow::show_device_detach()
 		do_device_detach_switch();
 		attach_process_done = true;
 		dialog->deleteLater();
+		maybe_run_pending_attach();
 	});
 
 	connect(cancelBtn, &QPushButton::clicked, [=](){
 		do_device_detach_switch();
 		attach_process_done = true;
 		dialog->deleteLater();
+		maybe_run_pending_attach();
+	});
+
+	/* 直接关窗口（标题栏 / Esc）也要放开 attach，否则插回来的设备永远不刷新 */
+	connect(dialog, &QDialog::rejected, this, [this, dialog]() {
+		attach_process_done = true;
+		dialog->deleteLater();
+		maybe_run_pending_attach();
 	});
 
 	dialog->show();
@@ -670,10 +679,23 @@ void sleep_ex(unsigned int msec)
     }
 }
 
+void MainWindow::maybe_run_pending_attach()
+{
+	if (!attach_pending)
+		return;
+
+	attach_pending = false;
+	QTimer::singleShot(0, this, [this]() { on_device_attached(); });
+}
+
 void MainWindow::on_device_attached()
 {
-	if (!attach_process_done)
+	if (!attach_process_done) {
+		/* 还不让刷新（比如"设备已断开"弹窗还开着）：先记下，等弹窗收尾再补。
+		 * 以前这里直接 return，插回来的设备就再也不会出现在列表里了。 */
+		attach_pending = true;
 		return;
+	}
 	attach_process_done = false;
 
 	if (last_focused_session_ && last_focused_session_->device()) {

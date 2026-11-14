@@ -137,6 +137,7 @@ public Q_SLOTS:
 
 private:
 	void do_device_detach_switch();
+	void maybe_run_pending_attach();
 	
 private Q_SLOTS:
 	void on_add_view(ViewType type, Session *session);
@@ -203,6 +204,8 @@ private:
 	bool is_repeat_acq_ = false;
 	bool is_wch_device_ = false;
 	bool attach_process_done = true;
+	/* 设备在"已断开"弹窗未关闭时插回来：先记下来，弹窗关掉后补一次刷新 */
+	bool attach_pending = false;
 };
 
 } // namespace pv
