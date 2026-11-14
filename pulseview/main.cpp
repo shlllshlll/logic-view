@@ -205,6 +205,13 @@ int main(int argc, char *argv[])
 	Srf::init();
 #endif
 
+	/*
+	 * 内嵌的 Python 会把 __pycache__ 写进 .app 内的解码器目录，等于改动了
+	 * 已签名的 bundle，codesign --verify 会报 "a sealed resource is missing
+	 * or invalid"。这里一律禁止写字节码。
+	 */
+	qputenv("PYTHONDONTWRITEBYTECODE", "1");
+
 	// Enable high DPI scaling before creating QApplication
 	QApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
 	QApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);

@@ -71,6 +71,12 @@ ln -sfn "$PY_VER" "$PYFW/Versions/Current"
 ln -sfn "Versions/Current/Python" "$PYFW/Python"
 ln -sfn "Versions/Current/Resources" "$PYFW/Resources"
 
+echo "==> cleaning __pycache__"
+# 内嵌 Python 正常运行时不该往 bundle 里写字节码（main.cpp 里已禁写），
+# 但复用旧 build 目录时可能残留，签名前必须清掉，否则封条校验会失败。
+find "$APP/Contents/Resources" -type d -name "__pycache__" -prune \
+    -exec rm -rf {} + 2>/dev/null || true
+
 echo "==> completing dependencies and signing"
 "$PYTHON" "$SCRIPT_DIR/fix_bundle_deps.py" "$APP"
 

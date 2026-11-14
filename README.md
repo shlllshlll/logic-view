@@ -87,20 +87,48 @@ Linux 构建路径和 GitHub Actions 三平台 CI，并把清理后的设备端�
 方案与进度见 [PORT_MACOS.md](PORT_MACOS.md)。
 
 ```bash
-./macos/install_deps.sh   # 首次：Homebrew 依赖（qt@5 / glibmm@2.66 / libusb / ...）
-./macos/build.sh --clean --bundle  # 构建 + 把 Qt/Python/glib 等全部打包进 .app
-open build/pulseview/LogicAnalyzer.app
+./macos/install_deps.sh            # 首次：Homebrew 依赖（qt@5 / glibmm@2.66 / libusb / ...）
+./macos/build.sh --install         # 构建 + 打包依赖 + 安装到 /Applications
 ```
 
-也可以直接安装到 `/Applications`：
+日常改完代码只需要增量重建（改动 `libsigrok/` 时驱动会自动重编、PulseView 自动重链）：
+
+```bash
+./macos/build.sh --bundle          # 只构建，产物在 build/pulseview/LogicAnalyzer.app
+./macos/build.sh --clean --bundle  # 全量重建，怀疑缓存损坏时用
+```
+
+`--install` 隐含 `--bundle`，它会先退出正在运行的上位机，把旧版本备份到 `/tmp`
+（只保留最新一份），再复制到 `/Applications` 并校验签名。想装到别处用
+`LOGICVIEW_INSTALL_DIR`：
+
+```bash
+LOGICVIEW_INSTALL_DIR="$HOME/Applications" ./macos/build.sh --install
+```
+
+手动安装（等价于 `--install` 的最后一步）：
 
 ```bash
 ditto build/pulseview/LogicAnalyzer.app /Applications/LogicAnalyzer.app
+open /Applications/LogicAnalyzer.app
 ```
 
 `--bundle` 会把 Qt5、Python.framework、glib/boost/libusb 等依赖复制进
 `Contents/Frameworks` 并改写路径；产物约 120MB，运行时不依赖 Homebrew。
 构建阶段仍然需要 Homebrew 的 `qt@5`、`python@3.14` 等。
+
+只想调试、不做打包时，去掉 `--bundle` 可以直接跑（运行时用 Homebrew 的 Qt，
+需要先 `source macos/env.sh`）：
+
+```bash
+source macos/env.sh && open build/pulseview/LogicAnalyzer.app
+```
+
+验证产物是否自包含（应无输出）：
+
+```bash
+otool -L build/pulseview/LogicAnalyzer.app/Contents/MacOS/LogicAnalyzer | grep homebrew
+```
 
 ## Linux 构建
 
